@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,9 +8,27 @@ version = "0.1.0"
 description = "RAC — lint and diff product requirements written in Markdown."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-authors = [{ name = "RAC" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "tcballard" }]
+keywords = ["requirements", "product-management", "markdown", "linter", "cli", "diff"]
 dependencies = ["markdown-it-py>=3.0"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Documentation",
+]
+
+[project.urls]
+Homepage = "https://github.com/tcballard/requirements-as-code"
+Repository = "https://github.com/tcballard/requirements-as-code"
+Issues = "https://github.com/tcballard/requirements-as-code/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
