@@ -89,52 +89,52 @@ def render_validation_json(product: Product, issues: list[Issue]) -> str:
 
 
 def render_diff_human(d: Diff, old_path: str, new_path: str) -> str:
-    lines: list[str] = [_bold(f"diff  {old_path} -> {new_path}"), ""]
-
     if d.is_empty():
-        lines.append("No changes.")
-        return "\n".join(lines)
+        return "No changes."
 
-    def section(title: str, items: list[str]) -> None:
-        if items:
-            lines.append(_bold(title))
-            lines.extend(f"  {item}" for item in items)
-            lines.append("")
+    blocks: list[str] = []
 
-    section(
-        f"Added requirements ({len(d.added_requirements)})",
-        [_green(f"+ [{r.id}] {r.text}") for r in d.added_requirements],
+    def list_block(title: str, items: list[str], sign: str) -> None:
+        """A titled block of single-line +/- entries (added/removed)."""
+        if not items:
+            return
+        color = _green if sign == "+" else _red
+        lines = [_bold(title), ""]
+        lines.extend(color(f"{sign} {item}") for item in items)
+        blocks.append("\n".join(lines))
+
+    list_block(
+        "Added Requirements",
+        [f"{r.id} {r.text}" for r in d.added_requirements],
+        "+",
     )
-    section(
-        f"Removed requirements ({len(d.removed_requirements)})",
-        [_red(f"- [{r.id}] {r.text}") for r in d.removed_requirements],
+    list_block(
+        "Removed Requirements",
+        [f"{r.id} {r.text}" for r in d.removed_requirements],
+        "-",
     )
+
     if d.modified_requirements:
-        lines.append(_bold(f"Modified requirements ({len(d.modified_requirements)})"))
-        for c in d.modified_requirements:
-            lines.append(f"  ~ [{c.id}]")
-            lines.append(f"      {_red('- ' + c.old_text)}")
-            lines.append(f"      {_green('+ ' + c.new_text)}")
-        lines.append("")
+        lines = [_bold("Modified Requirements"), ""]
+        for i, c in enumerate(d.modified_requirements):
+            if i:
+                lines.append("")
+            lines.append(f"~ {c.id}")
+            lines.append("")
+            lines.append("Before:")
+            lines.append(_red(c.old_text))
+            lines.append("")
+            lines.append("After:")
+            lines.append(_green(c.new_text))
+        blocks.append("\n".join(lines))
 
-    section(
-        f"Added metrics ({len(d.added_metrics)})",
-        [_green(f"+ {m}") for m in d.added_metrics],
-    )
-    section(
-        f"Removed metrics ({len(d.removed_metrics)})",
-        [_red(f"- {m}") for m in d.removed_metrics],
-    )
-    section(
-        f"Added risks ({len(d.added_risks)})",
-        [_green(f"+ {r}") for r in d.added_risks],
-    )
-    section(
-        f"Removed risks ({len(d.removed_risks)})",
-        [_red(f"- {r}") for r in d.removed_risks],
-    )
+    list_block("Added Metrics", d.added_metrics, "+")
+    list_block("Removed Metrics", d.removed_metrics, "-")
+    list_block("Added Risks", d.added_risks, "+")
+    list_block("Removed Risks", d.removed_risks, "-")
 
-    return "\n".join(lines).rstrip()
+    # Blank line between blocks.
+    return "\n\n".join(blocks)
 
 
 def render_diff_json(d: Diff, old_path: str, new_path: str) -> str:
