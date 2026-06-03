@@ -121,15 +121,26 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    version_str = f"rac {__version__}"
+
+    # Shared parent so `--version` works on the root parser *and* every
+    # subcommand (e.g. `rac ingest foo.docx --version`).
+    version_parent = argparse.ArgumentParser(add_help=False)
+    version_parent.add_argument(
+        "--version", action="version", version=version_str
+    )
+
     parser = argparse.ArgumentParser(
         prog="rac",
         description="Requirements As Code — lint and diff Markdown requirements.",
+        parents=[version_parent],
     )
-    parser.add_argument("--version", action="version", version=f"rac {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_validate = sub.add_parser(
-        "validate", help="Validate a single requirement file."
+        "validate",
+        help="Validate a single requirement file.",
+        parents=[version_parent],
     )
     p_validate.add_argument("file", help="Path to the requirement Markdown file.")
     p_validate.add_argument(
@@ -138,7 +149,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_validate.set_defaults(func=cmd_validate)
 
     p_diff = sub.add_parser(
-        "diff", help="Compare two versions of a requirement file."
+        "diff",
+        help="Compare two versions of a requirement file.",
+        parents=[version_parent],
     )
     p_diff.add_argument("old", help="Path to the old version.")
     p_diff.add_argument("new", help="Path to the new version.")
@@ -148,7 +161,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_diff.set_defaults(func=cmd_diff)
 
     p_stats = sub.add_parser(
-        "stats", help="Summarize a directory of requirement files."
+        "stats",
+        help="Summarize a directory of requirement files.",
+        parents=[version_parent],
     )
     p_stats.add_argument("directory", help="Directory to scan recursively for *.md.")
     p_stats.add_argument(
@@ -157,7 +172,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_stats.set_defaults(func=cmd_stats)
 
     p_ingest = sub.add_parser(
-        "ingest", help="Convert a source document (DOCX, Markdown) to Markdown."
+        "ingest",
+        help="Convert a source document (DOCX, Markdown) to Markdown.",
+        parents=[version_parent],
     )
     p_ingest.add_argument("file", help="Path to the source document.")
     p_ingest.add_argument(
