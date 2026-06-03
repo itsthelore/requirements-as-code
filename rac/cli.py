@@ -4,11 +4,13 @@ Commands:
     rac validate <file.md> [--json]
     rac diff <old.md> <new.md> [--json]
     rac stats <directory> [--json]
+    rac ingest <file> [-o OUT] [--force] [--json]
 
 Exit codes:
-    0  success (validate: no errors; diff: ran; stats: >=1 valid feature)
-    1  validate: errors found; stats: no valid features in the directory
-    2  usage / IO error (e.g. file not found, path is not a directory)
+    0  success
+    1  validate: errors found; stats: no valid features; ingest: conversion failed
+    2  usage / IO error (file not found, not a directory, unsupported type,
+       refuse-to-overwrite)
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from pathlib import Path
 from . import __version__
 from . import outputs
 from .diff import diff as diff_asts
+from .ingest import ConversionError, UnsupportedDocument, ingest
 from .parser import parse_file
 from .stats import collect_stats
 from .validate import has_errors, validate
@@ -77,16 +80,67 @@ def cmd_stats(args: argparse.Namespace) -> int:
     return EXIT_OK if stats.valid_features > 0 else EXIT_VALIDATION_FAILED
 
 
+def cmd_ingest(args: argparse.Namespace) -> int:
+    path = Path(args.file)
+    if not path.is_file():
+        print(f"rac: file not found: {args.file}", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE)
+
+    try:
+        result = ingest(args.file)
+    except UnsupportedDocument as exc:  # unhandled type / missing extra
+        print(f"rac: {exc}", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE)
+    except ConversionError as exc:  # recognized file, failed to convert
+        print(f"rac: {exc}", file=sys.stderr)
+        return EXIT_VALIDATION_FAILED
+
+    if args.output:
+        out = Path(args.output)
+        if out.exists() and not args.force:
+            print(
+                f"rac: {args.output} already exists; pass --force to overwrite",
+                file=sys.stderr,
+            )
+            raise SystemExit(EXIT_USAGE)
+        out.write_text(result.markdown, encoding="utf-8")
+        if args.json:
+            print(outputs.render_ingest_json(result, str(out)))
+        else:
+            print(
+                f"Wrote {out} ({len(result.markdown)} chars, via {result.converter}).",
+                file=sys.stderr,
+            )
+    else:
+        # No output file: preview the converted Markdown on stdout.
+        if args.json:
+            print(outputs.render_ingest_json(result, None))
+        else:
+            print(result.markdown)
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
+    version_str = f"rac {__version__}"
+
+    # Shared parent so `--version` works on the root parser *and* every
+    # subcommand (e.g. `rac ingest foo.docx --version`).
+    version_parent = argparse.ArgumentParser(add_help=False)
+    version_parent.add_argument(
+        "--version", action="version", version=version_str
+    )
+
     parser = argparse.ArgumentParser(
         prog="rac",
         description="Requirements As Code — lint and diff Markdown requirements.",
+        parents=[version_parent],
     )
-    parser.add_argument("--version", action="version", version=f"rac {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_validate = sub.add_parser(
-        "validate", help="Validate a single requirement file."
+        "validate",
+        help="Validate a single requirement file.",
+        parents=[version_parent],
     )
     p_validate.add_argument("file", help="Path to the requirement Markdown file.")
     p_validate.add_argument(
@@ -95,7 +149,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_validate.set_defaults(func=cmd_validate)
 
     p_diff = sub.add_parser(
-        "diff", help="Compare two versions of a requirement file."
+        "diff",
+        help="Compare two versions of a requirement file.",
+        parents=[version_parent],
     )
     p_diff.add_argument("old", help="Path to the old version.")
     p_diff.add_argument("new", help="Path to the new version.")
@@ -105,13 +161,32 @@ def build_parser() -> argparse.ArgumentParser:
     p_diff.set_defaults(func=cmd_diff)
 
     p_stats = sub.add_parser(
-        "stats", help="Summarize a directory of requirement files."
+        "stats",
+        help="Summarize a directory of requirement files.",
+        parents=[version_parent],
     )
     p_stats.add_argument("directory", help="Directory to scan recursively for *.md.")
     p_stats.add_argument(
         "--json", action="store_true", help="Emit JSON instead of human-readable text."
     )
     p_stats.set_defaults(func=cmd_stats)
+
+    p_ingest = sub.add_parser(
+        "ingest",
+        help="Convert a source document (DOCX, Markdown) to Markdown.",
+        parents=[version_parent],
+    )
+    p_ingest.add_argument("file", help="Path to the source document.")
+    p_ingest.add_argument(
+        "-o", "--output", help="Write Markdown here instead of printing it."
+    )
+    p_ingest.add_argument(
+        "--force", action="store_true", help="Overwrite the output file if it exists."
+    )
+    p_ingest.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of human-readable text."
+    )
+    p_ingest.set_defaults(func=cmd_ingest)
 
     # Future command (rac review <file>) will register here.
     return parser

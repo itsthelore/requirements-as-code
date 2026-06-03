@@ -6,9 +6,30 @@ import json
 
 import pytest
 
+from rac import __version__
 from rac.cli import main
 
 from conftest import fixture_path
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--version"],
+        ["validate", "x", "--version"],
+        ["diff", "a", "b", "--version"],
+        ["stats", "d", "--version"],
+        ["ingest", "foo.docx", "--version"],
+        ["ingest", "--version"],  # short-circuits before the required `file`
+    ],
+)
+def test_version_flag_on_root_and_subcommands(argv, capsys):
+    # --version prints and exits 0 from the root parser and every subcommand,
+    # even when other args are present and even when required positionals aren't.
+    with pytest.raises(SystemExit) as exc:
+        main(argv)
+    assert exc.value.code == 0
+    assert capsys.readouterr().out.strip() == f"rac {__version__}"
 
 
 def test_validate_valid_exits_zero(capsys):

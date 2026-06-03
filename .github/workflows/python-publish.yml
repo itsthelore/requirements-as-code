@@ -21,6 +21,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # setuptools-scm derives the version from git tags, so we need the
+          # full history + tags (the default shallow checkout omits them).
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
