@@ -67,21 +67,50 @@ class MarkItDownConverter:
     """
 
     name = "markitdown"
-    extensions = (".docx",)  # v0.3.x will extend: .html, .pdf, ...
+    # HTML needs no extra (built into MarkItDown); the others come from the
+    # corresponding markitdown extras, all bundled in our `ingest` extra.
+    extensions = (".docx", ".pdf", ".html", ".htm", ".pptx", ".xls", ".xlsx")
+
+    _MISSING_EXTRA = (
+        "converting '{suffix}' needs the ingest extra: "
+        "pip install 'requirements-as-code[ingest]'"
+    )
 
     def convert(self, path: Path) -> str:
         try:
             from markitdown import MarkItDown
         except ModuleNotFoundError as exc:
             raise UnsupportedDocument(
-                f"converting '{path.suffix}' needs the ingest extra: "
-                "pip install 'requirements-as-code[ingest]'"
+                self._MISSING_EXTRA.format(suffix=path.suffix)
             ) from exc
+
         try:
             result = MarkItDown().convert(str(path))
         except Exception as exc:  # MarkItDown raises a variety of errors
+            if _is_missing_dependency(exc):
+                # MarkItDown is installed but this format's reader extra isn't.
+                raise UnsupportedDocument(
+                    self._MISSING_EXTRA.format(suffix=path.suffix)
+                ) from exc
             raise ConversionError(f"could not convert {path.name}: {exc}") from exc
         return result.text_content
+
+
+def _is_missing_dependency(exc: Exception) -> bool:
+    """True if ``exc`` is (or wraps) a MarkItDown missing-dependency error."""
+    try:
+        from markitdown._exceptions import MissingDependencyException
+    except Exception:  # pragma: no cover - defensive
+        return False
+    if isinstance(exc, MissingDependencyException):
+        return True
+    # MarkItDown wraps converter failures in FileConversionException(attempts=...),
+    # each attempt carrying the original error in .exc_info = (type, value, tb).
+    for attempt in getattr(exc, "attempts", None) or []:
+        info = getattr(attempt, "exc_info", None)
+        if info and isinstance(info[1], MissingDependencyException):
+            return True
+    return False
 
 
 # Registry — first converter whose extensions match wins. Order is not currently

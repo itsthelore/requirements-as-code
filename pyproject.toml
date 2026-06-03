@@ -34,9 +34,17 @@ Issues = "https://github.com/tcballard/requirements-as-code/issues"
 
 [project.optional-dependencies]
 # Document ingestion (rac ingest). Optional so the core install stays light.
-# markitdown[docx] pulls the DOCX reader; later formats add their own extras.
-ingest = ["markitdown[docx]"]
-dev = ["pytest>=7.0", "markitdown[docx]", "python-docx"]
+# Each MarkItDown extra pulls one format reader (HTML needs none — it's built in).
+ingest = ["markitdown[docx,pdf,pptx,xlsx,xls]"]
+# dev also pulls the libraries used to *generate* fixture files in the tests.
+dev = [
+    "pytest>=7.0",
+    "markitdown[docx,pdf,pptx,xlsx,xls]",
+    "python-docx",
+    "python-pptx",
+    "openpyxl",
+    "reportlab",
+]
 
 [project.scripts]
 rac = "rac.cli:main"

@@ -411,9 +411,9 @@ installed via the optional `ingest` extra:
 pip install "requirements-as-code[ingest]"
 ```
 
-Supported today: **DOCX** and **Markdown** (pass-through). HTML and PDF are
-planned for v0.3.x. Converters live behind a `DocumentConverter` abstraction, so
-new sources can be added without changing the CLI.
+Supported formats: **DOCX, PDF, HTML, PPTX, XLSX**, and **Markdown**
+(pass-through, no extra needed). Converters live behind a `DocumentConverter`
+abstraction, so new sources can be added without changing the CLI.
 
 `ingest` exits `0` on success, `1` if a recognized document fails to convert, and
 `2` for usage errors (file not found, unsupported type, missing `ingest` extra,
