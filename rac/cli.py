@@ -173,7 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_ingest = sub.add_parser(
         "ingest",
-        help="Convert a source document (DOCX, Markdown) to Markdown.",
+        help="Convert a document (DOCX, PDF, HTML, PPTX, XLSX, Markdown) to Markdown.",
         parents=[version_parent],
     )
     p_ingest.add_argument("file", help="Path to the source document.")
