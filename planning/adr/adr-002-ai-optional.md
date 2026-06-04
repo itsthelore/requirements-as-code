@@ -1,7 +1,21 @@
-ADR-002 AI Optional
-Decision:
+# ADR-002 AI Optional
+
+## Status
+
+Accepted
+
+## Context
+
+RAC should be useful on its own, with AI as an enhancement rather than a dependency.
+
+## Decision
+
 RAC must provide value without AI.
-Why:
-Lower complexity
-Easier testing
-Works offline
+
+## Consequences
+
+### Positive
+
+- Lower complexity
+- Easier testing
+- Works offline

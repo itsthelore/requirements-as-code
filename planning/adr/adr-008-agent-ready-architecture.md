@@ -1,15 +1,40 @@
-ADR-009 AI-Assisted Development
-Decision
-When using AI coding agents:
-Accepted ADRs are considered architectural constraints.
-Agents should consult ADRs before significant changes.
-Conflicts should result in a proposed ADR rather than silent implementation.
-ADRs outweigh README examples when there is disagreement.
-Consequences
-Positive:
-Consistent architecture
-Less drift between contributors
-Better onboarding for humans and agents
-Negative:
-Slightly slower implementation
-More ADR maintenance
+# ADR-008 Agent Ready Architecture
+
+## Status
+
+Accepted
+
+## Context
+
+Future versions of RAC may be used by Claude, Codex, Cursor, and other AI systems.
+
+The architecture should avoid coupling business logic to the CLI.
+
+## Decision
+
+All RAC capabilities will be implemented in reusable service layers.
+
+The CLI will be a thin wrapper around those services.
+
+## Alternatives Considered
+
+### CLI-only Architecture
+
+Pros:
+- Simpler initially
+
+Cons:
+- Difficult to expose as SDK or MCP server
+
+## Consequences
+
+### Positive
+
+- Easy MCP support
+- Easy SDK support
+- Easier testing
+
+### Negative
+
+- Slightly more abstraction
+- Additional project structure

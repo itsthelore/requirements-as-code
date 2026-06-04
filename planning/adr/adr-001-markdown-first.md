@@ -1,8 +1,21 @@
-**ADR-001 Markdown First**
+# ADR-001 Markdown First
 
-Decision: Markdown is the canonical source format.
+## Status
 
-Why:
+Accepted
+
+## Context
+
+RAC needs a single canonical source format for requirements and other artifacts.
+
+## Decision
+
+Markdown is the canonical source format.
+
+## Consequences
+
+### Positive
+
 - Human-readable
 - Git-friendly
 - Tool-independent
