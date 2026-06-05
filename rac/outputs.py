@@ -245,6 +245,24 @@ def render_stats_human(s: PortfolioStats) -> str:
                 reasons = ", ".join(r.error_codes) or "unknown"
                 lines.append(f"  {_red(r.path)} — {reasons}")
 
+    # Prompts are reported separately and lightly (count + invalid only); the
+    # section is omitted entirely when there are none.
+    if s.prompts:
+        lines += [
+            "",
+            _bold("Prompts"),
+            "=======",
+            "",
+            f"Total: {s.prompt_count}",
+            f"Valid: {s.valid_prompts}",
+        ]
+        invalid_prompts = s.invalid_prompts
+        if invalid_prompts:
+            lines += ["", _bold(f"Invalid Prompts ({len(invalid_prompts)})")]
+            for p in invalid_prompts:
+                reasons = ", ".join(p.error_codes) or "unknown"
+                lines.append(f"  {_red(p.path)} — {reasons}")
+
     return "\n".join(lines)
 
 
@@ -290,6 +308,16 @@ def render_stats_json(s: PortfolioStats) -> str:
             "valid": s.valid_roadmaps,
             "invalid": [
                 {"file": r.path, "errors": r.error_codes} for r in s.invalid_roadmaps
+            ],
+        }
+    # Additive: only present when the portfolio contains prompts. Lightweight by
+    # design — count and validity only (no prompt quality metrics).
+    if s.prompts:
+        payload["prompts"] = {
+            "count": s.prompt_count,
+            "valid": s.valid_prompts,
+            "invalid": [
+                {"file": p.path, "errors": p.error_codes} for p in s.invalid_prompts
             ],
         }
     return json.dumps(payload, indent=2)

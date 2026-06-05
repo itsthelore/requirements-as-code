@@ -4,10 +4,10 @@
 each one, and aggregates the results. Like the rest of RAC, it works on the
 Product AST: every `.md` is parsed into a :class:`~rac.models.Product`.
 
-Requirement, Decision, and Roadmap artifacts are aggregated separately so that one
-never distorts another: requirement totals/averages span only requirement files,
-decisions get their own status/category breakdown, and roadmaps get a lightweight
-count of how many exist and how many are valid.
+Requirement, Decision, Roadmap, and Prompt artifacts are aggregated separately so
+that one never distorts another: requirement totals/averages span only requirement
+files, decisions get their own status/category breakdown, and roadmaps and prompts
+each get a lightweight count of how many exist and how many are valid.
 
 Counting basis: requirement totals, averages, and the per-feature breakdown span
 *all* parsed requirement files (including ones that fail validation). A file
@@ -66,6 +66,20 @@ class RoadmapStat:
 
 
 @dataclass
+class PromptStat:
+    """Per-file result for a Prompt artifact (kept separate from features).
+
+    Lightweight by design (v0.6.2): identity plus validity and error codes only.
+    No prompt quality/completeness metrics — those are out of scope (REQ-010).
+    """
+
+    path: str
+    name: str  # the prompt title, or the filename stem if it has none
+    valid: bool
+    error_codes: list[str]
+
+
+@dataclass
 class PortfolioStats:
     """Aggregate view over all discovered requirement files."""
 
@@ -73,10 +87,13 @@ class PortfolioStats:
     features: list[FeatureStat] = field(default_factory=list)
     decisions: list[DecisionStat] = field(default_factory=list)
     roadmaps: list[RoadmapStat] = field(default_factory=list)
+    prompts: list[PromptStat] = field(default_factory=list)
 
     # --- counts (requirement features) ---
     @property
     def files_found(self) -> int:
+        # Legacy name: counts Requirement-style *features* only. Decisions,
+        # roadmaps, and prompts are tracked in their own lists, not here.
         return len(self.features)
 
     @property
@@ -168,6 +185,19 @@ class PortfolioStats:
     def invalid_roadmaps(self) -> list[RoadmapStat]:
         return [r for r in self.roadmaps if not r.valid]
 
+    # --- prompts ---
+    @property
+    def prompt_count(self) -> int:
+        return len(self.prompts)
+
+    @property
+    def valid_prompts(self) -> int:
+        return sum(1 for p in self.prompts if p.valid)
+
+    @property
+    def invalid_prompts(self) -> list[PromptStat]:
+        return [p for p in self.prompts if not p.valid]
+
 
 def _bucket(decisions: list[DecisionStat], attr: str, metadata_key: str) -> dict[str, int]:
     """Count ``decisions`` by ``attr`` in the artifact spec's declared order."""
@@ -194,8 +224,9 @@ def _neg_name(name: str) -> tuple[int, ...]:
 def collect_stats(directory: str) -> PortfolioStats:
     """Parse and classify every Markdown file under ``directory``.
 
-    Decisions are routed to their own aggregate; everything else is treated as a
-    requirement feature (preserving prior behavior for requirement repositories).
+    Decisions, roadmaps, and prompts are each routed to their own aggregate;
+    everything else is treated as a requirement feature (preserving prior behavior
+    for requirement repositories).
     """
     stats = PortfolioStats(directory=directory)
     for path in find_markdown_files(directory):
@@ -218,6 +249,18 @@ def collect_stats(directory: str) -> PortfolioStats:
             error_codes = [i.code for i in issues if i.severity == "error"]
             stats.roadmaps.append(
                 RoadmapStat(
+                    path=str(path),
+                    name=name,
+                    valid=not error_codes,
+                    error_codes=error_codes,
+                )
+            )
+            continue
+        if result.type == "prompt":
+            issues = validate(product)
+            error_codes = [i.code for i in issues if i.severity == "error"]
+            stats.prompts.append(
+                PromptStat(
                     path=str(path),
                     name=name,
                     valid=not error_codes,

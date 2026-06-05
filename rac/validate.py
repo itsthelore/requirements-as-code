@@ -43,6 +43,8 @@ def validate(product: Product) -> list[Issue]:
         return _validate_decision(product)
     if artifact_type == "roadmap":
         return _validate_roadmap(product)
+    if artifact_type == "prompt":
+        return _validate_prompt(product)
     return _validate_requirement(product)
 
 
@@ -138,6 +140,47 @@ def _validate_roadmap(product: Product) -> list[Issue]:
                     "error",
                     f"missing-{section}",
                     f"Roadmap is missing a ## {section.title()} section.",
+                )
+            )
+
+    return issues
+
+
+def _validate_prompt(product: Product) -> list[Issue]:
+    """Validate a Prompt artifact (REQ-006).
+
+    Required sections (Objective, Input, Instructions, Output) must be present;
+    missing recommended/optional sections never fail or warn. Prompts carry no
+    metadata and are never executed (REQ-011) — RAC treats them as knowledge.
+
+    Section presence is checked against the raw headings, consistent with the
+    Decision and Roadmap validators; the Prompt spec's synonyms are a
+    classification aid only, so validation still expects the canonical headings.
+    """
+    spec = spec_for("prompt")
+    assert spec is not None  # the prompt spec always exists
+    issues: list[Issue] = []
+
+    if not product.title:
+        issues.append(Issue("error", "missing-title", "File has no top-level # title."))
+
+    if product.extra_title_lines:
+        issues.append(
+            Issue(
+                "error",
+                "multiple-titles",
+                "File has more than one top-level # title; expected exactly one.",
+                product.extra_title_lines[0],
+            )
+        )
+
+    for section in spec.required:
+        if section not in product.sections:
+            issues.append(
+                Issue(
+                    "error",
+                    f"missing-{section}",
+                    f"Prompt is missing a ## {section.title()} section.",
                 )
             )
 
