@@ -9,10 +9,11 @@ there is a single source of truth.
 Section names are normalized (stripped + casefolded) for matching; ``display``
 holds the human-facing label.
 
-Three artifact types have a concrete schema today: Requirement (RAC's own format /
-validator), Decision (the ADR format used in this repository), and Roadmap
-(outcome- and initiative-focused knowledge, added in v0.6.0). Prompt and Meeting
-are intentionally deferred until their schemas are formalized — see planning/roadmap/.
+Four artifact types have a concrete schema today: Requirement (RAC's own format /
+validator), Decision (the ADR format used in this repository), Roadmap (outcome- and
+initiative-focused knowledge, added in v0.6.0), and Prompt (structured AI prompts as
+knowledge, added in v0.6.2). Meeting is intentionally deferred until its schema is
+formalized — see planning/roadmap/.
 """
 
 from __future__ import annotations
@@ -180,6 +181,64 @@ ARTIFACT_SPECS: tuple[ArtifactSpec, ...] = (
         # never affects the Requirement spec's canonical "success metrics" section.
         synonyms={
             "success metrics": "success measures",
+        },
+    ),
+    ArtifactSpec(
+        name="prompt",
+        display="Prompt",
+        required=("objective", "input", "instructions", "output"),
+        recommended=("constraints", "examples", "evaluation"),
+        # Relationship sections are recognized but never scored or templated; they
+        # let a Prompt reference other artifacts as text without RAC analyzing those
+        # links (relationship analysis is v0.7.x).
+        optional=("related requirements", "related decisions", "related roadmaps"),
+        descriptions={
+            "objective": "What this prompt is intended to achieve",
+            "input": "The information, context, or source material the prompt expects",
+            "instructions": "The steps, rules, or approach the model should follow",
+            "output": "The expected response format or result",
+            "constraints": "Boundaries or restrictions the response must respect",
+            "examples": "Example inputs and outputs that clarify intended behavior",
+            # Human criteria for judging a response — not automated testing or scoring.
+            "evaluation": "Human criteria for judging whether a response is good",
+        },
+        guidance={
+            "objective": (
+                "What task should this prompt help complete?",
+                "What outcome should the model produce?",
+            ),
+            "input": (
+                "What context or source material does the prompt require?",
+                "What assumptions should the model make about the input?",
+            ),
+            "instructions": (
+                "What should the model do first?",
+                "What process should it follow?",
+            ),
+            "output": (
+                "What should the output contain?",
+                "Should the response be structured as bullets, JSON, Markdown, or prose?",
+            ),
+            "constraints": (
+                "What should the model avoid?",
+                "Are there tone, format, safety, or scope constraints?",
+            ),
+            "examples": (
+                "What examples would make the desired behavior clearer?",
+            ),
+            "evaluation": (
+                "What makes a good response?",
+                "How can the user tell whether the prompt worked?",
+            ),
+        },
+        # Artifact-scoped (see rac.classification._mapped): these only normalize
+        # headings when scoring against the Prompt spec, so they never affect other
+        # artifact types. They aid classification and improve (both synonym-aware);
+        # validation still expects the canonical headings, like Decision/Roadmap.
+        synonyms={
+            "expected output": "output",
+            "output specification": "output",
+            "input specification": "input",
         },
     ),
 )

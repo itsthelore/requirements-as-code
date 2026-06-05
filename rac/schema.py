@@ -138,6 +138,18 @@ def _free_text_todo(section: str) -> str:
         "outcomes": "TODO: describe the outcomes this roadmap is intended to achieve.",
         "initiatives": "TODO: describe the major initiatives that support the outcomes.",
         "success measures": "TODO: describe how progress or success will be measured.",
+        "objective": "TODO: describe what this prompt is intended to achieve.",
+        "input": (
+            "TODO: describe the information, context, or source material the "
+            "prompt expects."
+        ),
+        "instructions": (
+            "TODO: describe the steps, rules, or approach the model should follow."
+        ),
+        "output": "TODO: describe the expected response format or result.",
+        "constraints": "TODO: describe any boundaries or restrictions.",
+        "examples": "TODO: provide example inputs and outputs if useful.",
+        "evaluation": "TODO: describe how the output should be judged.",
         "context": "TODO: describe the situation, constraints, and background.",
         "decision": "TODO: describe the decision that has been made.",
         "consequences": (
