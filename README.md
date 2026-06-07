@@ -217,6 +217,10 @@ Contributions, ideas, and experiments welcome.
 pip install requirements-as-code
 ```
 
+```bash
+uv tool install requirements-as-code
+```
+
 ---
 
 ## License
