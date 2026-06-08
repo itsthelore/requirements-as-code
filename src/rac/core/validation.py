@@ -1,6 +1,6 @@
-"""Validate a :class:`~rac.models.Product` against RAC's format rules.
+"""Validate a :class:`~rac.core.models.Product` against RAC's format rules.
 
-Returns a flat list of :class:`~rac.models.Issue` objects (errors and warnings);
+Returns a flat list of :class:`~rac.core.models.Issue` objects (errors and warnings);
 it never stops at the first problem. Whether a run "fails" is the CLI's decision,
 based on whether any ``error``-severity issues are present.
 """

@@ -13,6 +13,7 @@ from dataclasses import asdict
 from rac.core.models import Diff, Issue, Product
 from rac.core.schema import SchemaReference
 from rac.services.improve import ImprovementResult
+from rac.services.index import RepositoryIndex
 from rac.services.ingest import IngestResult
 from rac.services.inspect import DirectoryInspection, InspectionResult
 from rac.services.relationships import RelationshipReport, RelationshipValidation
@@ -236,3 +237,11 @@ def render_ingest_json(result: IngestResult, output_path: str | None) -> str:
 def render_portfolio_json(s) -> str:
     """JSON `rac portfolio` output (stable contract, ADR-007)."""
     return json.dumps(s.to_dict(), indent=2)
+
+
+# --- index -------------------------------------------------------------------
+
+
+def render_index_json(index: RepositoryIndex) -> str:
+    """JSON `rac index` output (stable contract, ADR-007)."""
+    return json.dumps(index.to_dict(), indent=2)

@@ -52,7 +52,7 @@ class ArtifactSpec:
     synonyms: dict[str, str] = field(default_factory=dict)
     # Canonical-identifier section (v0.7.2 relationship validation): the normalized
     # section name whose value is this artifact type's identifier, consulted by
-    # ``rac.relationships.artifact_identifier`` before falling back to the filename
+    # ``rac.core.identity.artifact_identifier`` before falling back to the filename
     # stem. A forward hook — no spec sets it today; relationship resolution works
     # from the ``## ID`` section and filename stem until a type opts in.
     id_field: str | None = None
@@ -76,7 +76,7 @@ class ArtifactSpec:
 # references but does not resolve, validate, or graph them.
 #
 # The relationship-section vocabulary and its canonical ordering live in
-# :mod:`rac.relationships` (the module that owns relationship logic). This module
+# :mod:`rac.services.relationships` (the module that owns relationship logic). This module
 # only owns the human-facing ``descriptions`` for those sections, which the specs
 # below consume.
 
@@ -255,7 +255,7 @@ ARTIFACT_SPECS: tuple[ArtifactSpec, ...] = (
             ),
         },
         # Artifact-scoped: this only normalizes "success metrics" when scoring a
-        # document against the Roadmap spec (see rac.classification._mapped), so it
+        # document against the Roadmap spec (see rac.core.classification._mapped), so it
         # never affects the Requirement spec's canonical "success metrics" section.
         synonyms={
             "success metrics": "success measures",
@@ -320,7 +320,7 @@ ARTIFACT_SPECS: tuple[ArtifactSpec, ...] = (
                 "How can the user tell whether the prompt worked?",
             ),
         },
-        # Artifact-scoped (see rac.classification._mapped): these only normalize
+        # Artifact-scoped (see rac.core.classification._mapped): these only normalize
         # headings when scoring against the Prompt spec, so they never affect other
         # artifact types. They aid classification and improve (both synonym-aware);
         # validation still expects the canonical headings, like Decision/Roadmap.

@@ -7,7 +7,7 @@ read-only (REQ-004) and generates no content beyond schema-derived placeholders 
 no AI, no rewriting.
 
 Improvement depends only on the artifact *type* and a *schema comparison*
-(:func:`rac.classification.missing_sections`); it never reaches into classification
+(:func:`rac.core.classification.missing_sections`); it never reaches into classification
 confidence internals. A type is *supported* when it has an :class:`ArtifactSpec`
 **and** complete guidance coverage for its expected sections — so requirement and
 decision are supported today, while Unknown (and any future spec lacking guidance)

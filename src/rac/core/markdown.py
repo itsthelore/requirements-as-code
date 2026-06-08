@@ -1,8 +1,8 @@
-"""Turn a Markdown requirement file into a :class:`~rac.models.Product` AST.
+"""Turn a Markdown requirement file into a :class:`~rac.core.models.Product` AST.
 
 We tokenize with ``markdown-it-py`` and walk the (flat) token stream, tracking the
 current ``##`` section. This module performs *structural extraction only* — it does
-not enforce any rules. All rule-checking lives in :mod:`rac.validate`, so that
+not enforce any rules. All rule-checking lives in :mod:`rac.core.validation`, so that
 diffing and future analysis share a single source of truth.
 
 Heading matching is case-insensitive and whitespace-trimmed, so ``## problem`` and

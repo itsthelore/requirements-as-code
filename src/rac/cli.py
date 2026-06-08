@@ -10,10 +10,12 @@ Commands:
     rac schema [--list] [type] [--json | --template]
     rac relationships <dir | file.md> [--validate] [--json] [--top-level]
     rac portfolio <directory> [--json] [--top-level]
+    rac index [directory] [--json] [--top-level]
 
 Exit codes:
     0  success (incl. inspect/improve reporting Unknown; relationships found or
-       not; --validate with all references resolved; portfolio summary produced)
+       not; --validate with all references resolved; portfolio summary produced;
+       index produced)
     1  validate: errors found; stats: no valid known artifacts; ingest:
        conversion failed; relationships --validate: broken/ambiguous/self
        references or duplicate identifiers found
@@ -35,6 +37,7 @@ from rac.core.schema import available_schemas, schema_reference
 from rac.core.validation import has_errors, validate
 from rac.services.diff import diff as diff_asts
 from rac.services.improve import improve_product
+from rac.services.index import build_repository_index
 from rac.services.ingest import ConversionError, UnsupportedDocument, ingest
 from rac.services.inspect import build_inspection, inspect_directory
 from rac.services.portfolio import build_portfolio_summary
@@ -305,6 +308,19 @@ def cmd_portfolio(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_index(args: argparse.Namespace) -> int:
+    if not Path(args.directory).is_dir():
+        print(f"rac: not a directory: {args.directory}", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE)
+    recursive = not args.top_level
+    index = build_repository_index(args.directory, recursive=recursive)
+    if args.json:
+        print(outputs.render_index_json(index))
+    else:
+        print(outputs.render_index_human(index))
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     version_str = f"rac {__version__}"
 
@@ -505,6 +521,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Recurse into subdirectories (the default; accepted for clarity).",
     )
     p_portfolio.set_defaults(func=cmd_portfolio)
+
+    p_index = sub.add_parser(
+        "index",
+        help="Inventory every artifact in a repository (id, type, title, path).",
+        parents=[version_parent],
+    )
+    p_index.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Directory to scan recursively for *.md (default: current directory).",
+    )
+    p_index.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of human-readable text."
+    )
+    p_index.add_argument(
+        "--top-level",
+        action="store_true",
+        help="Only the top-level files in the directory (no recursion).",
+    )
+    p_index.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Recurse into subdirectories (the default; accepted for clarity).",
+    )
+    p_index.set_defaults(func=cmd_index)
 
     return parser
 
