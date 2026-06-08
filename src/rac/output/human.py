@@ -14,6 +14,7 @@ from rac.core.classification import CONFIDENCE_THRESHOLD, TypeScore
 from rac.core.models import Diff, Issue, Product
 from rac.core.schema import SchemaReference
 from rac.services.improve import ImprovementResult
+from rac.services.index import RepositoryIndex
 from rac.services.inspect import DirectoryInspection, InspectionResult
 from rac.services.relationships import (
     ISSUE_DUPLICATE_IDENTIFIER,
@@ -607,4 +608,33 @@ def render_portfolio_human(s) -> str:
         f"  {score_color(str(score))} / 100",
     ]
 
+    return "\n".join(lines)
+
+
+# --- index -------------------------------------------------------------------
+
+
+def render_index_human(index: RepositoryIndex) -> str:
+    """Human-readable `rac index` output: a repository manifest."""
+    lines = [
+        _bold("Repository Index"),
+        "================",
+        "",
+        f"Directory:  {index.directory}",
+        f"Artifacts:  {index.artifact_count}",
+        "",
+    ]
+    if not index.artifacts:
+        lines.append("(none)")
+        return "\n".join(lines)
+
+    # Aligned columns: ID, type, title (— when absent), path last.
+    id_w = max(len(e.id) for e in index.artifacts)
+    type_w = max(len(e.type) for e in index.artifacts)
+    title_w = max(len(e.title or "—") for e in index.artifacts)
+    for e in index.artifacts:
+        title = e.title or "—"
+        lines.append(
+            f"  {e.id:<{id_w}}  {e.type:<{type_w}}  {title:<{title_w}}  {e.path}"
+        )
     return "\n".join(lines)
