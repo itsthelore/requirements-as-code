@@ -1,7 +1,7 @@
 """Artifact classification — the shared heuristic over a parsed document.
 
-Scores a :class:`~rac.models.Product` against the artifact schemas in
-:mod:`rac.artifacts` and picks the best-fit type (or Unknown). This is a pure,
+Scores a :class:`~rac.core.models.Product` against the artifact schemas in
+:mod:`rac.core.artifacts` and picks the best-fit type (or Unknown). This is a pure,
 AI-optional function (ADR-002): it looks only at which ``##`` sections a document
 contains. It is the single home for classification, consumed by ``inspect``,
 ``validate``, ``stats``, and future commands so they never reach it through one

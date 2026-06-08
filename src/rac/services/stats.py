@@ -2,7 +2,7 @@
 
 `rac stats <directory>` walks the tree for Markdown files, parses and classifies
 each one, and aggregates the results. Like the rest of RAC, it works on the
-Product AST: every `.md` is parsed into a :class:`~rac.models.Product`.
+Product AST: every `.md` is parsed into a :class:`~rac.core.models.Product`.
 
 Requirement, Decision, Roadmap, Prompt, and Design artifacts are aggregated separately so
 that one never distorts another: requirement totals/averages span only requirement

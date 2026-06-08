@@ -1,7 +1,7 @@
 """Schema reference service — expose registered artifact schemas directly.
 
 `rac schema` answers "what should this artifact look like?" without requiring an
-existing file. It consumes :mod:`rac.artifacts` as the single source of truth and
+existing file. It consumes :mod:`rac.core.artifacts` as the single source of truth and
 derives human/JSON/template data from registered :class:`ArtifactSpec` objects.
 """
 

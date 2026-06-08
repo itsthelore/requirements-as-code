@@ -1,7 +1,7 @@
 """The Product AST and result types.
 
 These dataclasses are the *only* thing validation, diffing, and future analysis
-should operate on. The parser (``rac.parser``) is responsible for turning a
+should operate on. The parser (``rac.core.markdown``) is responsible for turning a
 Markdown file into a :class:`Product`; everything downstream reads the AST, never
 the raw text.
 """

@@ -6,7 +6,7 @@ For Decisions it also surfaces lightweight metadata (status, category, supersede
 when present. `rac inspect <dir>` aggregates the type across a directory into
 counts. It is strictly observational — it never modifies content and never
 recommends changes (that is a future `improve` command's job). Classification is
-delegated to :mod:`rac.classification` (the shared, AI-optional heuristic).
+delegated to :mod:`rac.core.classification` (the shared, AI-optional heuristic).
 """
 
 from __future__ import annotations

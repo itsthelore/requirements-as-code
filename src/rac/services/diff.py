@@ -1,4 +1,4 @@
-"""Compare two :class:`~rac.models.Product` ASTs and classify the changes.
+"""Compare two :class:`~rac.core.models.Product` ASTs and classify the changes.
 
 Diffing operates purely on the AST, never on raw Markdown text.
 
