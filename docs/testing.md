@@ -66,13 +66,16 @@ src/rac/
 2. **Review your artifact changes** with RAC's own tooling:
 
    ```bash
-   .venv/bin/rac stats rac/
+   .venv/bin/rac validate rac/
    .venv/bin/rac relationships rac/ --validate
+   .venv/bin/rac review rac/
    ```
 
-   `stats` shows whether new or edited artifacts are complete; `relationships
-   --validate` flags references that no longer resolve (it exits `1` when it finds
-   any, so read its report and confirm every issue is intended or pre-existing).
+   `validate` checks every recognized artifact against its schema;
+   `relationships --validate` flags references that no longer resolve; `review`
+   combines both into one prioritized report. Each exits `1` on blocking
+   findings — and the same gates run in CI (`tests/test_dogfood.py`), so a red
+   result here will be a red build.
 
 3. **Follow the commit conventions** in
    [`rac/prompts/rac-agent-commit-guidelines.md`](../rac/prompts/rac-agent-commit-guidelines.md):
