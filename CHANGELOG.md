@@ -21,6 +21,10 @@ details, release history over commit history.
 - Identity validation: conflicting frontmatter/legacy identity and duplicate
   canonical IDs are deterministic errors — RAC never silently picks one
   (v0.7.11).
+- Relationship references resolve against legacy identity aliases (`## ID`
+  values, filename prefixes, stems), so adopting canonical IDs does not break
+  existing human-readable references; RAC's own corpus now carries canonical
+  frontmatter identity (v0.7.11).
 - `rac new <type> <output-path>` — create a valid artifact from its canonical
   bundled template; deterministic, AI-free, and never overwrites an existing
   file (v0.7.10).
