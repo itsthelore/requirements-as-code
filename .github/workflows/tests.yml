@@ -24,14 +24,17 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
         # One battery per .py service, plus grouped core / cli / artifacts.
-        # Every tests/test_*.py belongs to exactly one battery (no orphans).
+        # Every tests/test_*.py belongs to exactly one battery (no orphans) —
+        # enforced by tests/test_ci_batteries.py in the core battery.
         battery:
           - name: core
-            paths: "tests/test_validate.py tests/test_parser.py tests/test_schema.py tests/test_identity.py"
+            paths: "tests/test_validate.py tests/test_parser.py tests/test_schema.py tests/test_identity.py tests/test_frontmatter.py tests/test_metadata_identity.py tests/test_idgen.py tests/test_ci_batteries.py"
           - name: cli
             paths: "tests/test_cli.py"
           - name: artifacts
             paths: "tests/test_design.py tests/test_roadmap.py tests/test_prompt.py tests/test_decision_metadata.py"
+          - name: create
+            paths: "tests/test_create.py tests/test_templates.py"
           - name: diff
             paths: "tests/test_diff.py"
           - name: improve
@@ -40,12 +43,18 @@ jobs:
             paths: "tests/test_index.py"
           - name: ingest
             paths: "tests/test_ingest.py"
+          - name: init
+            paths: "tests/test_init.py"
           - name: inspect
             paths: "tests/test_inspect.py"
+          - name: migrate
+            paths: "tests/test_migrate.py"
           - name: portfolio
             paths: "tests/test_portfolio.py"
           - name: relationships
             paths: "tests/test_relationships.py tests/test_relationships_cmd.py tests/test_relationship_validation.py"
+          - name: resolve
+            paths: "tests/test_resolve.py"
           - name: review
             paths: "tests/test_review.py"
           - name: stats
