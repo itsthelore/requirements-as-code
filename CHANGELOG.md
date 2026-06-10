@@ -8,6 +8,12 @@ details, release history over commit history.
 
 ### Added
 
+- Explorer relationship navigation (v0.8.5): `g` from a context view (or
+  `/relationships <ref>`) opens a knowledge-graph view — the artifact's
+  outgoing relationships, its impact ("what depends on this?"), and its lineage
+  (Supersedes / Superseded By). Connected artifacts are selectable, so the graph
+  can be traversed one hop at a time. Rendered from Core's relationship model;
+  Explorer infers nothing.
 - Explorer action workflows (v0.8.4): open the current artifact in your editor
   (`e`, via `$VISUAL`/`$EDITOR`; Explorer never edits — ADR-024); a guided
   `/import <source> [target]` that converts a document through the ingest
