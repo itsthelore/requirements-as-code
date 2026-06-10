@@ -12,6 +12,7 @@ Commands:
     rac review <directory> [--json] [--top-level]
     rac portfolio <directory> [--json] [--top-level]
     rac index [directory] [--json] [--top-level]
+    rac explorer [directory] [--top-level]
     rac new <artifact-type> <output-path> [--json]
     rac templates [--json]
     rac init [directory] [--key KEY] [--json]
@@ -23,7 +24,8 @@ Exit codes:
     0  success (incl. inspect/improve reporting Unknown; relationships found or
        not; --validate with all references resolved; portfolio summary produced;
        index produced; artifact created; templates listed; find with or without
-       matches; migration or dry run completed, even with nothing to migrate)
+       matches; migration or dry run completed, even with nothing to migrate;
+       explorer session quit by the user)
     1  validate: errors found; stats: no valid known artifacts; ingest:
        conversion failed; relationships --validate: broken/ambiguous/self
        references or duplicate identifiers found; review: invalid artifacts
@@ -34,7 +36,7 @@ Exit codes:
        config or ID generation exhausted
     2  usage / IO error (file not found, not a directory, unsupported type,
        refuse-to-overwrite, missing output directory, repository not
-       initialized, invalid repository key)
+       initialized, invalid repository key, explorer extra not installed)
 """
 
 from __future__ import annotations
@@ -387,6 +389,21 @@ def cmd_index(args: argparse.Namespace) -> int:
     else:
         print(outputs.render_index_human(index))
     return EXIT_OK
+
+
+def cmd_explorer(args: argparse.Namespace) -> int:
+    if not Path(args.directory).is_dir():
+        print(f"rac: not a directory: {args.directory}", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE)
+    # Imported lazily: launch decides whether the explorer extra is installed,
+    # and the base CLI must not pay an import cost for the optional TUI.
+    from rac.explorer.launch import ExplorerUnavailable, run_explorer
+
+    try:
+        return run_explorer(args.directory, recursive=not args.top_level)
+    except ExplorerUnavailable as exc:
+        print(f"rac: {exc}", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE) from None
 
 
 def cmd_new(args: argparse.Namespace) -> int:
@@ -762,6 +779,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Recurse into subdirectories (the default; accepted for clarity).",
     )
     p_index.set_defaults(func=cmd_index)
+
+    p_explorer = sub.add_parser(
+        "explorer",
+        help="Launch the interactive terminal Explorer (needs the explorer extra).",
+        parents=[version_parent],
+    )
+    p_explorer.add_argument(
+        "directory",
+        nargs="?",
+        default=".",
+        help="Repository to explore (default: current directory).",
+    )
+    p_explorer.add_argument(
+        "--top-level",
+        action="store_true",
+        help="Only the top-level files in the directory (no recursion).",
+    )
+    p_explorer.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Recurse into subdirectories (the default; accepted for clarity).",
+    )
+    p_explorer.set_defaults(func=cmd_explorer)
 
     p_new = sub.add_parser(
         "new",
