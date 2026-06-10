@@ -36,7 +36,10 @@ def render_overview(health: HealthState) -> str:
 class HealthScreen(Screen[None]):
     """Score + areas + a selectable attention list; Esc backs out."""
 
-    BINDINGS = [Binding("escape", "back", "Back")]
+    BINDINGS = [
+        Binding("escape", "back", "Back"),
+        Binding("r", "recommendations", "Recommendations"),
+    ]
 
     def __init__(self, adapter: ExplorerAdapter, health: HealthState) -> None:
         super().__init__()
@@ -72,6 +75,13 @@ class HealthScreen(Screen[None]):
         context = self.adapter.context_state(row.path)
         if context is not None:
             self.app.push_screen(ContextScreen(context))
+
+    def action_recommendations(self) -> None:
+        recommendations = self.adapter.recommendations_state()
+        if recommendations is not None:
+            from .recommendations import RecommendationsScreen
+
+            self.app.push_screen(RecommendationsScreen(self.adapter, recommendations))
 
     def action_back(self) -> None:
         self.app.pop_screen()
