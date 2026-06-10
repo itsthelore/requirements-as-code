@@ -220,15 +220,13 @@ Interaction models, onboarding experiences, visual systems, navigation workflows
 
 - ADR-015 Explorer as a Consumer
 
-- ADR-016 Explorer Delivery Surface
+- ADR-028 Explorer Delivery Surface
 
 ## Related Design Artifacts
 
 - DESIGN-first-run-experience
 
 - DESIGN-command-surface
-
-- DESIGN-navigation-model
 
 - DESIGN-health-model
 
@@ -312,6 +310,10 @@ Explorer succeeds when:
 
 - Relationship Navigation
 
+### Implemented By
+
+- v0.8.x Explorer roadmap series (v0.8.0 – v0.8.6)
+
 ### Related
 
 - Product Intent CI (Watchkeeper)
@@ -320,7 +322,7 @@ Explorer succeeds when:
 
 - ADR-015 Explorer as a Consumer
 
-- ADR-016 Explorer Delivery Surface
+- ADR-028 Explorer Delivery Surface
 
 ## Future Considerations
 
