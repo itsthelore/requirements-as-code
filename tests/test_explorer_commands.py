@@ -10,12 +10,13 @@ from __future__ import annotations
 from rac.explorer.commands import EXAMPLES, REGISTRY, SEARCH, parse, suggestions
 
 
-def test_registry_is_the_v082_contract():
+def test_registry_is_the_v083_contract():
     assert [spec.name for spec in REGISTRY] == [
         "open",
         "find",
         "browse",
         "health",
+        "recommendations",
         "home",
         "help",
         "quit",
@@ -23,10 +24,11 @@ def test_registry_is_the_v082_contract():
     assert all(spec.usage and spec.summary for spec in REGISTRY)
 
 
-def test_health_is_discoverable():
-    assert "health" in {spec.name for spec in REGISTRY}
-    assert parse("health").command == "health"
+def test_health_and_recommendations_are_discoverable():
+    names = {spec.name for spec in REGISTRY}
+    assert "health" in names and "recommendations" in names
     assert parse("/health").command == "health"
+    assert parse("/recommendations").command == "recommendations"
 
 
 def test_registered_command_routes_with_args():

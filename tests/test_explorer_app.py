@@ -186,7 +186,7 @@ async def test_slash_help_lists_registry_and_esc_closes():
         await pilot.pause()
         assert isinstance(app.screen, CommandScreen)
         results = app.screen.query_one(OptionList)
-        assert results.option_count == 7  # the whole registry, nothing more
+        assert results.option_count == 8  # the whole registry, nothing more
         await pilot.press("escape")
         assert isinstance(app.screen, RepositoryScreen)
 
@@ -325,6 +325,42 @@ async def test_health_attention_item_opens_context():
         await pilot.press("h")
         await pilot.pause()
         await pilot.press("enter")  # first attention item (focused)
+        await pilot.pause()
+        assert isinstance(app.screen, ContextScreen)
+
+
+@pytest.mark.asyncio
+async def test_slash_recommendations_opens_screen():
+    from rac.explorer.screens.recommendations import RecommendationsScreen
+
+    app = ExplorerApp(str(FIXTURES / "broken_rels"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*"recommendations")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, RecommendationsScreen)
+        from textual.widgets import OptionList
+
+        listing = app.screen.query_one(OptionList)
+        assert listing.option_count >= 1  # at least the broken-relationship finding
+
+
+@pytest.mark.asyncio
+async def test_health_r_opens_recommendations_and_item_opens_context():
+    from rac.explorer.screens.context import ContextScreen
+    from rac.explorer.screens.recommendations import RecommendationsScreen
+
+    app = ExplorerApp(str(FIXTURES / "broken_rels"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("h")
+        await pilot.pause()
+        await pilot.press("r")  # health → recommendations
+        await pilot.pause()
+        assert isinstance(app.screen, RecommendationsScreen)
+        await pilot.press("enter")  # first recommendation → its artifact
         await pilot.pause()
         assert isinstance(app.screen, ContextScreen)
 

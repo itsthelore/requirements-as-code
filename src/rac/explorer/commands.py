@@ -40,6 +40,9 @@ REGISTRY: tuple[CommandSpec, ...] = (
     CommandSpec("find", "find <query> [type]", "Search artifacts by ID, title, or path"),
     CommandSpec("browse", "browse [type]", "Browse all artifacts"),
     CommandSpec("health", "health", "Show repository health and attention items"),
+    CommandSpec(
+        "recommendations", "recommendations", "Show recommendations with impact and actions"
+    ),
     CommandSpec("home", "home", "Return to the repository home"),
     CommandSpec("help", "help", "List available commands"),
     CommandSpec("quit", "quit", "Quit the Explorer"),

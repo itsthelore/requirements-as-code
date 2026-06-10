@@ -110,6 +110,15 @@ class CommandScreen(ModalScreen[None]):
 
             self.app.pop_screen()
             self.app.push_screen(HealthScreen(self.adapter, health))
+        elif invocation.command == "recommendations":
+            recommendations = self.adapter.recommendations_state()
+            if recommendations is None:
+                self._set_options([Option("Repository not loaded yet", disabled=True)])
+                return
+            from .recommendations import RecommendationsScreen
+
+            self.app.pop_screen()
+            self.app.push_screen(RecommendationsScreen(self.adapter, recommendations))
         elif invocation.command == "browse":
             artifact_type = invocation.args.casefold() or None
             browser = self.adapter.browser_state(artifact_type)
