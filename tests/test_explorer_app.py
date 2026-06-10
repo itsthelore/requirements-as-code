@@ -476,6 +476,32 @@ async def test_slash_import_reports_unsupported(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_recommendations_export_previews_then_writes(tmp_path, monkeypatch):
+    from textual.widgets import Static
+
+    from rac.explorer.screens.confirm import ConfirmWriteScreen
+
+    monkeypatch.chdir(tmp_path)  # export defaults to recommendations.md in cwd
+    app = ExplorerApp(str(FIXTURES / "broken_rels"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("h")
+        await pilot.pause()
+        await pilot.press("r")  # recommendations
+        await pilot.pause()
+        await pilot.press("x")  # export → confirm screen
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmWriteScreen)
+        assert not (tmp_path / "recommendations.md").exists()  # preview only
+
+        await pilot.press("y")
+        await pilot.pause()
+        written = (tmp_path / "recommendations.md").read_text(encoding="utf-8")
+        assert "# Recommendations" in written
+        assert "Imported" in str(app.screen.query_one("#confirm-panel", Static).content)
+
+
+@pytest.mark.asyncio
 async def test_quit_binding_exits_cleanly():
     app = ExplorerApp(str(FIXTURES / "valid_clean"))
     async with app.run_test() as pilot:

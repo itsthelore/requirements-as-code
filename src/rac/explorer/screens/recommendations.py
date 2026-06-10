@@ -32,7 +32,10 @@ def _prompt(row: RecommendationRow) -> str:
 class RecommendationsScreen(Screen[None]):
     """Category-grouped recommendations; Enter opens the artifact, Esc backs."""
 
-    BINDINGS = [Binding("escape", "back", "Back")]
+    BINDINGS = [
+        Binding("escape", "back", "Back"),
+        Binding("x", "export", "Export"),
+    ]
 
     def __init__(self, adapter: ExplorerAdapter, recommendations: RecommendationsState) -> None:
         super().__init__()
@@ -70,6 +73,14 @@ class RecommendationsScreen(Screen[None]):
         context = self.adapter.context_state(self._paths[int(event.option_id)])
         if context is not None:
             self.app.push_screen(ContextScreen(self.adapter, context))
+
+    def action_export(self) -> None:
+        result = self.adapter.export_recommendations()
+        if isinstance(result, str):
+            return  # nothing to export
+        from .confirm import ConfirmWriteScreen
+
+        self.app.push_screen(ConfirmWriteScreen(self.adapter, result))
 
     def action_back(self) -> None:
         self.app.pop_screen()
