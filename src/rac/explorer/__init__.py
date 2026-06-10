@@ -1,8 +1,18 @@
-"""RAC Explorer boundary package (consumer of RAC services).
+"""RAC Explorer — interactive terminal UI over RAC services (v0.8.0, ADR-028).
 
-Intentionally empty for v0.7.4. Explorer is a *presentation* layer: when it is
-built it must consume existing RAC service-layer APIs (rac.services) rather than
-implementing its own repository intelligence (ADR-015). Anything visible in
-Explorer must also be obtainable through ``rac <command>`` or an equivalent
-service call.
+Explorer is a *presentation* layer: it consumes RAC service-layer APIs
+(rac.services) through a dedicated adapter and implements no repository
+intelligence of its own (ADR-015). Anything visible in Explorer is also
+obtainable through ``rac <command>`` or an equivalent service call.
+
+Layout:
+
+- ``launch``  — ``run_explorer`` entry point; lazily imports the Textual app
+  so the base install works without the ``explorer`` extra.
+- ``adapter`` — invokes services, translates Core models into UI state.
+- ``state``   — frozen UI-state dataclasses widgets render.
+- ``app`` / ``screens`` / ``widgets`` — the Textual application (the only
+  modules that import Textual).
+
+This package import stays Textual-free.
 """
