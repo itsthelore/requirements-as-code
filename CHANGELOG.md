@@ -8,6 +8,12 @@ details, release history over commit history.
 
 ### Added
 
+- Explorer recommendations (v0.8.3): `/recommendations` (or `r` from the health
+  view) presents RAC Core's review findings grouped by category (Validation,
+  Relationships, Repository Health, Quality), each with its impact, a suggested
+  `rac` command, and navigation to the affected artifact. Severities map to
+  Critical / Warning / Suggestion. Advisory only — Explorer applies nothing and
+  invents no findings.
 - Explorer health view (v0.8.2): `h` or `/health` opens a repository health
   screen — Core's score with a text label, the four health areas
   (Completeness, Relationships, Validation, Coverage), and a prioritized
