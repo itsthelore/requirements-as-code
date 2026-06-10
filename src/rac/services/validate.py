@@ -15,9 +15,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 from rac.core.artifacts import spec_for
-from rac.core.classification import classify
-from rac.core.fs import find_markdown_files
-from rac.core.markdown import parse_file
+from rac.core.corpus import walk_corpus
 from rac.core.models import Issue
 from rac.core.validation import has_errors, validate
 
@@ -97,13 +95,13 @@ class DirectoryValidation:
 def validate_directory(directory: str, recursive: bool = True) -> DirectoryValidation:
     """Validate every recognized artifact under ``directory``.
 
-    Files are processed in sorted path order (``find_markdown_files``), so the
+    Files are processed in sorted path order (``walk_corpus``), so the
     result — and everything rendered from it — is deterministic.
     """
     files: list[FileValidation] = []
-    for path in find_markdown_files(directory, recursive=recursive):
-        product = parse_file(str(path))
-        artifact_type = classify(product).type
+    for entry in walk_corpus(directory, recursive=recursive):
+        path, product = entry.path, entry.product
+        artifact_type = entry.artifact_type
         if spec_for(artifact_type) is None:
             # Unknown artifacts: not validated (portfolio semantics) — the
             # requirement fallback is a single-file compatibility path only.
