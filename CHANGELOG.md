@@ -8,6 +8,12 @@ details, release history over commit history.
 
 ### Added
 
+- Explorer action workflows (v0.8.4): open the current artifact in your editor
+  (`e`, via `$VISUAL`/`$EDITOR`; Explorer never edits — ADR-024); a guided
+  `/import <source> [target]` that converts a document through the ingest
+  service, previews the Markdown, and writes only on confirmation (never
+  overwriting); and `x` to export recommendations to a Markdown file with the
+  same preview-and-confirm flow. Conversions report progress.
 - Explorer recommendations (v0.8.3): `/recommendations` (or `r` from the health
   view) presents RAC Core's review findings grouped by category (Validation,
   Relationships, Repository Health, Quality), each with its impact, a suggested
