@@ -1,8 +1,9 @@
-"""Headless screen tests for the Explorer shell (v0.8.0, ADR-027).
+"""Headless tests for the Explorer workspace frame (v0.8.7, ADR-027).
 
 Runs the Textual app through ``App.run_test()`` (no real terminal). Worker
 results are awaited via ``app.workers.wait_for_complete()`` before asserting,
-keeping the thread-worker tests deterministic.
+keeping the thread-worker tests deterministic. Key sequences are the
+behaviour contract: they match what a user types.
 """
 
 from __future__ import annotations
@@ -11,10 +12,15 @@ import time
 from pathlib import Path
 
 import pytest
+from textual.widgets import Markdown, OptionList, Static, TabbedContent
 
 from rac.explorer import firstrun, mascot
 from rac.explorer.app import ExplorerApp
+from rac.explorer.screens.main import MainScreen
 from rac.explorer.widgets import RepositoryPanel
+from rac.explorer.widgets.commandbar import CommandBar
+from rac.explorer.widgets.sidebar import NavigationSidebar
+from rac.explorer.widgets.views import ContextView
 
 FIXTURES = Path(__file__).parent / "fixtures" / "portfolio_summary"
 
@@ -39,6 +45,18 @@ async def _settled_panel_text(app: ExplorerApp, pilot) -> str:
     await app.workers.wait_for_complete()
     await pilot.pause()
     return str(app.screen.query_one(RepositoryPanel).content)
+
+
+async def _open_first_artifact(app: ExplorerApp, pilot) -> None:
+    """Home → sidebar → expand the first group → open its first artifact."""
+    await pilot.press("enter")  # home → sidebar
+    await pilot.press("down", "enter")  # first type group → expand
+    await pilot.pause()
+    await pilot.press("down", "enter")  # first artifact → context view
+    await pilot.pause()
+
+
+# --- the shell: loading, summary, errors -------------------------------------
 
 
 @pytest.mark.asyncio
@@ -98,34 +116,6 @@ async def test_reload_binding_recovers_after_repair(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_browse_open_context_and_esc_stack():
-    from rac.explorer.screens.browser import BrowserScreen
-    from rac.explorer.screens.context import ContextScreen
-    from rac.explorer.screens.repository import RepositoryScreen
-
-    app = ExplorerApp(str(FIXTURES / "valid_clean"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-
-        await pilot.press("enter")  # home → browser
-        assert isinstance(app.screen, BrowserScreen)
-
-        await pilot.press("enter")  # first artifact → context view
-        assert isinstance(app.screen, ContextScreen)
-        from textual.widgets import Static
-
-        text = str(app.screen.query_one("#context-panel", Static).content)
-        assert "ID " in text and "Status " in text
-        assert "Completeness  ✓ all recommended sections present" in text
-        assert "Relationships" in text and "Diagnostics" in text
-
-        await pilot.press("escape")  # context → browser
-        assert isinstance(app.screen, BrowserScreen)
-        await pilot.press("escape")  # browser → home
-        assert isinstance(app.screen, RepositoryScreen)
-
-
-@pytest.mark.asyncio
 async def test_home_shows_attention_and_hint():
     app = ExplorerApp(str(FIXTURES / "broken_rels"))
     async with app.run_test() as pilot:
@@ -135,51 +125,343 @@ async def test_home_shows_attention_and_hint():
         assert "Press / for anything" in text
 
 
-@pytest.mark.asyncio
-async def test_slash_open_navigates_to_context():
-    from rac.explorer.screens.command import CommandScreen
-    from rac.explorer.screens.context import ContextScreen
+# --- the persistent frame -----------------------------------------------------
 
+
+@pytest.mark.asyncio
+async def test_frame_persists_across_navigation():
+    """Navigation swaps the context view; the frame widgets never rebuild."""
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        screen = app.screen
+        assert isinstance(screen, MainScreen)
+        sidebar = screen.query_one(NavigationSidebar)
+        bar = screen.query_one(CommandBar)
+
+        await pilot.press("h")  # → health view
+        await pilot.pause()
+        assert screen.current_view == "view-health"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert screen.current_view == "view-home"
+
+        # Same screen, same widget instances — one stable frame.
+        assert app.screen is screen
+        assert screen.query_one(NavigationSidebar) is sidebar
+        assert screen.query_one(CommandBar) is bar
+
+
+@pytest.mark.asyncio
+async def test_rac_lantern_theme_is_the_default():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        assert app.theme == "rac-lantern"
+
+
+@pytest.mark.asyncio
+async def test_theme_preference_overrides_the_default(monkeypatch, tmp_path):
+    from rac.explorer.preferences import Preferences, save_preferences
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    save_preferences(Preferences(theme="textual-light"))
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        assert app.theme == "textual-light"
+
+
+@pytest.mark.asyncio
+async def test_sidebar_hides_in_narrow_terminals():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test(size=(70, 24)) as pilot:
+        await _settled_panel_text(app, pilot)
+        assert not app.screen.query_one(NavigationSidebar).display
+
+
+def test_stylesheet_ships_as_package_data():
+    # Breaks only in installed wheels unless pinned here: the stylesheet must
+    # resolve through the package, not the source tree.
+    from importlib.resources import files
+
+    assert files("rac.explorer").joinpath("explorer.tcss").is_file()
+
+
+# --- focus routing --------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_slash_focuses_bar_and_esc_returns_focus():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("enter")  # home → sidebar
+        sidebar = app.screen.query_one(NavigationSidebar)
+        assert app.focused is sidebar
+
+        await pilot.press("/")
+        assert isinstance(app.focused, CommandBar)
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.focused is sidebar  # back to where the user was
+
+
+@pytest.mark.asyncio
+async def test_typing_q_in_the_bar_inserts_text_and_does_not_quit():
     app = ExplorerApp(str(FIXTURES / "valid_clean"))
     async with app.run_test() as pilot:
         await _settled_panel_text(app, pilot)
         await pilot.press("/")
-        assert isinstance(app.screen, CommandScreen)
+        await pilot.press("q")
+        assert app.is_running
+        assert app.screen.query_one(CommandBar).value == "q"
+        # A typed `/` must also land in the input, not re-trigger the binding.
+        await pilot.press("slash")
+        assert app.screen.query_one(CommandBar).value == "q/"
+
+
+@pytest.mark.asyncio
+async def test_status_line_hints_follow_the_focused_panel():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        hints = app.screen.query_one("#status-hints", Static)
+        await pilot.press("enter")  # sidebar focused
+        await pilot.pause()
+        sidebar_hints = str(hints.content)
+        await pilot.press("/")  # bar focused
+        await pilot.pause()
+        bar_hints = str(hints.content)
+        assert sidebar_hints != bar_hints
+        assert "Run" in bar_hints
+
+        # The health chip rides the right side after a load (text + number).
+        right = str(app.screen.query_one("#status-right", Static).content)
+        assert "✓ Healthy" in right and "100" in right
+        assert "1 link" in right
+
+
+# --- sidebar navigation -----------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_sidebar_groups_carry_type_tags_and_counts():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        sidebar = app.screen.query_one(NavigationSidebar)
+        labels = [str(node.label) for node in sidebar.root.children]
+        assert any("Requirement" in label and "1" in label for label in labels)
+        assert any("Decision" in label for label in labels)
+
+        # Lazy population: rows appear on expand, tagged with text (ADR-028).
+        sidebar.root.children[0].expand()
+        await pilot.pause()
+        row_label = str(sidebar.root.children[0].children[0].label)
+        assert row_label.startswith("REQ ")
+        assert "req-001" in row_label
+
+
+@pytest.mark.asyncio
+async def test_sidebar_enter_opens_context_and_esc_returns_home():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await _open_first_artifact(app, pilot)
+        assert app.screen.current_view == "view-context"
+        text = str(app.screen.query_one("#context-panel", Static).content)
+        assert "ID " in text and "Status " in text
+        assert "Completeness  ✓ all recommended sections present" in text
+        assert "Relationships" in text and "Diagnostics" in text
+        # The selected artifact's status chip sits in the sidebar border.
+        assert app.screen.query_one(NavigationSidebar).border_subtitle == "✓ valid"
+
+        await pilot.press("escape")  # context → home (view history)
+        await pilot.pause()
+        assert app.screen.current_view == "view-home"
+
+
+@pytest.mark.asyncio
+async def test_flat_grouping_preference_lists_rows_without_headers(monkeypatch, tmp_path):
+    from rac.explorer.preferences import Preferences, save_preferences
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    save_preferences(Preferences(artifact_grouping="flat"))
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        sidebar = app.screen.query_one(NavigationSidebar)
+        # Rows directly under the root: every node carries an artifact path.
+        assert sidebar.root.children
+        assert all((node.data or "").endswith(".md") for node in sidebar.root.children)
+
+
+@pytest.mark.asyncio
+async def test_command_open_reveals_the_artifact_in_the_sidebar():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
         await pilot.press(*"open adr-001")
         await pilot.press("enter")
         await pilot.pause()
-        assert isinstance(app.screen, ContextScreen)
-        from textual.widgets import Static
+        await pilot.pause()  # reveal settles after a refresh
+        sidebar = app.screen.query_one(NavigationSidebar)
+        assert sidebar.cursor_node is not None
+        assert (sidebar.cursor_node.data or "").endswith("adr-001.md")
 
+
+# --- the tabbed context view ---------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_context_renders_the_artifact_markdown_by_default():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*"open req-001")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        tabs = app.screen.query_one(TabbedContent)
+        assert tabs.active == "tab-content"  # Notion content focus: the document first
+        markdown = app.screen.query_one("#artifact-markdown", Markdown)
+        source = (FIXTURES / "valid_clean" / "req-001.md").read_text(encoding="utf-8")
+        assert markdown.source == source
+
+        # The panel title carries the artifact identity.
+        title = str(app.screen.query_one("#context-region").border_title)
+        assert "req-001" in title and "Search Feature" in title
+
+
+@pytest.mark.asyncio
+async def test_context_tabs_carry_text_labels():
+    # ADR-028: tab meaning rides on the label text, never colour alone.
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        tabs = app.screen.query_one(TabbedContent)
+        labels = [
+            str(tabs.get_tab(pane_id).label)
+            for pane_id in ("tab-content", "tab-inspection", "tab-links", "tab-findings")
+        ]
+        assert labels == ["Content", "Inspection", "Links", "Findings"]
+
+
+@pytest.mark.asyncio
+async def test_links_tab_traverses_to_a_connected_artifact():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*"open adr-001")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        await pilot.press("g")  # context → links tab
+        await pilot.pause()
+        assert app.screen.query_one(TabbedContent).active == "tab-links"
+        panel = str(app.screen.query_one("#relationship-panel", Static).content)
+        assert "Relationships" in panel and "Impact" in panel and "Lineage" in panel
+
+        await pilot.press("enter")  # open the first connected artifact
+        await pilot.pause()
+        title = str(app.screen.query_one("#context-region").border_title)
+        assert "req-001" in title  # traversed across the graph
+
+        await pilot.press("escape")  # back through view history
+        await pilot.pause()
+        title = str(app.screen.query_one("#context-region").border_title)
+        assert "adr-001" in title
+
+
+@pytest.mark.asyncio
+async def test_slash_relationships_opens_the_links_tab():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*"relationships adr-001")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.current_view == "view-context"
+        assert app.screen.query_one(TabbedContent).active == "tab-links"
+
+
+@pytest.mark.asyncio
+async def test_context_e_opens_external_editor(monkeypatch):
+    import rac.explorer.editor as editor_mod
+
+    launched: list[list[str]] = []
+    monkeypatch.setattr(editor_mod, "_RUNNER", lambda cmd: launched.append(list(cmd)))
+    monkeypatch.setenv("EDITOR", "code")
+
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await _open_first_artifact(app, pilot)
+        await pilot.press("e")
+        await pilot.pause()
+        status = str(app.screen.query_one("#context-status", Static).content)
+        assert "Opened" in status and "code" in status
+        assert launched and launched[0][0] == "code"
+
+
+@pytest.mark.asyncio
+async def test_context_e_without_editor_shows_guidance(monkeypatch):
+    monkeypatch.delenv("VISUAL", raising=False)
+    monkeypatch.delenv("EDITOR", raising=False)
+
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await _open_first_artifact(app, pilot)
+        await pilot.press("e")
+        await pilot.pause()
+        status = str(app.screen.query_one("#context-status", Static).content)
+        assert "No editor configured" in status
+
+
+# --- the command surface ----------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_slash_open_navigates_to_context():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        assert isinstance(app.focused, CommandBar)
+        await pilot.press(*"open adr-001")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.current_view == "view-context"
         text = str(app.screen.query_one("#context-panel", Static).content)
         assert "decision" in text
 
 
 @pytest.mark.asyncio
-async def test_slash_bare_text_searches_and_enter_opens():
-    from rac.explorer.screens.command import CommandScreen
-    from rac.explorer.screens.context import ContextScreen
-
+async def test_slash_bare_text_searches_in_context_region_and_enter_opens():
     app = ExplorerApp(str(FIXTURES / "valid_clean"))
     async with app.run_test() as pilot:
         await _settled_panel_text(app, pilot)
+        screen = app.screen
         await pilot.press("/")
         await pilot.press(*"search feature")
         await pilot.press("enter")
         await pilot.pause()
-        assert isinstance(app.screen, CommandScreen)  # results listed, surface open
-        await pilot.press("enter")  # open the first (focused) result
+        # Results render inside the context region; the frame never jumps.
+        assert app.screen is screen
+        assert screen.current_view == "view-results"
+        await pilot.press("enter")  # open the first (highlighted) result
         await pilot.pause()
-        assert isinstance(app.screen, ContextScreen)
+        assert screen.current_view == "view-context"
 
 
 @pytest.mark.asyncio
-async def test_slash_help_lists_registry_and_esc_closes():
-    from textual.widgets import OptionList
-
-    from rac.explorer.screens.command import CommandScreen
-    from rac.explorer.screens.repository import RepositoryScreen
-
+async def test_slash_help_lists_registry():
     app = ExplorerApp(str(FIXTURES / "valid_clean"))
     async with app.run_test() as pilot:
         await _settled_panel_text(app, pilot)
@@ -187,35 +469,26 @@ async def test_slash_help_lists_registry_and_esc_closes():
         await pilot.press(*"help")
         await pilot.press("enter")
         await pilot.pause()
-        assert isinstance(app.screen, CommandScreen)
-        results = app.screen.query_one(OptionList)
+        assert app.screen.current_view == "view-results"
+        results = app.screen.query_one("#command-results", OptionList)
         assert results.option_count == 12  # the whole registry, nothing more
-        await pilot.press("escape")
-        assert isinstance(app.screen, RepositoryScreen)
 
 
 @pytest.mark.asyncio
-async def test_slash_home_pops_navigation_stack():
-    from rac.explorer.screens.repository import RepositoryScreen
-
+async def test_slash_home_returns_to_the_home_view():
     app = ExplorerApp(str(FIXTURES / "valid_clean"))
     async with app.run_test() as pilot:
         await _settled_panel_text(app, pilot)
-        await pilot.press("enter")  # browser
-        await pilot.press("enter")  # context
+        await _open_first_artifact(app, pilot)
         await pilot.press("/")
         await pilot.press(*"home")
         await pilot.press("enter")
         await pilot.pause()
-        assert isinstance(app.screen, RepositoryScreen)
+        assert app.screen.current_view == "view-home"
 
 
 @pytest.mark.asyncio
-async def test_slash_browse_with_type_filter():
-    from textual.widgets import OptionList
-
-    from rac.explorer.screens.browser import BrowserScreen
-
+async def test_slash_browse_with_type_filter_focuses_the_group():
     app = ExplorerApp(str(FIXTURES / "valid_clean"))
     async with app.run_test() as pilot:
         await _settled_panel_text(app, pilot)
@@ -223,9 +496,28 @@ async def test_slash_browse_with_type_filter():
         await pilot.press(*"browse decision")
         await pilot.press("enter")
         await pilot.pause()
-        assert isinstance(app.screen, BrowserScreen)
-        artifact_list = app.screen.query_one(OptionList)
-        assert artifact_list.option_count == 2  # the type header + one decision
+        sidebar = app.screen.query_one(NavigationSidebar)
+        assert app.focused is sidebar
+        assert sidebar.cursor_node is not None
+        assert sidebar.cursor_node.data == "group:decision"
+        assert sidebar.cursor_node.is_expanded
+
+
+@pytest.mark.asyncio
+async def test_slash_preferences_shows_values_and_path():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*"preferences")
+        await pilot.press("enter")
+        await pilot.pause()
+        results = app.screen.query_one("#command-results", OptionList)
+        rendered = " ".join(str(opt.prompt) for opt in results._options)
+        assert "mascot" in rendered and "explorer.json" in rendered
+
+
+# --- onboarding -------------------------------------------------------------------
 
 
 def test_first_run_marker_round_trip(fresh_first_run):
@@ -285,309 +577,6 @@ async def test_first_run_invalid_repository_opens_anyway(fresh_first_run):
 
 
 @pytest.mark.asyncio
-async def test_h_binding_opens_health_screen():
-    from textual.widgets import Static
-
-    from rac.explorer.screens.health import HealthScreen
-    from rac.explorer.screens.repository import RepositoryScreen
-
-    app = ExplorerApp(str(FIXTURES / "valid_clean"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("h")
-        assert isinstance(app.screen, HealthScreen)
-        overview = str(app.screen.query_one("#health-overview", Static).content)
-        assert "Score" in overview
-        assert "Completeness" in overview and "Coverage" in overview
-        assert "✓ Healthy" in overview
-        await pilot.press("escape")
-        assert isinstance(app.screen, RepositoryScreen)
-
-
-@pytest.mark.asyncio
-async def test_slash_health_opens_health_screen():
-    from rac.explorer.screens.health import HealthScreen
-
-    app = ExplorerApp(str(FIXTURES / "valid_clean"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("/")
-        await pilot.press(*"health")
-        await pilot.press("enter")
-        await pilot.pause()
-        assert isinstance(app.screen, HealthScreen)
-
-
-@pytest.mark.asyncio
-async def test_health_attention_item_opens_context():
-    from rac.explorer.screens.context import ContextScreen
-
-    app = ExplorerApp(str(FIXTURES / "broken_rels"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("h")
-        await pilot.pause()
-        await pilot.press("enter")  # first attention item (focused)
-        await pilot.pause()
-        assert isinstance(app.screen, ContextScreen)
-
-
-@pytest.mark.asyncio
-async def test_slash_recommendations_opens_screen():
-    from rac.explorer.screens.recommendations import RecommendationsScreen
-
-    app = ExplorerApp(str(FIXTURES / "broken_rels"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("/")
-        await pilot.press(*"recommendations")
-        await pilot.press("enter")
-        await pilot.pause()
-        assert isinstance(app.screen, RecommendationsScreen)
-        from textual.widgets import OptionList
-
-        listing = app.screen.query_one(OptionList)
-        assert listing.option_count >= 1  # at least the broken-relationship finding
-
-
-@pytest.mark.asyncio
-async def test_health_r_opens_recommendations_and_item_opens_context():
-    from rac.explorer.screens.context import ContextScreen
-    from rac.explorer.screens.recommendations import RecommendationsScreen
-
-    app = ExplorerApp(str(FIXTURES / "broken_rels"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("h")
-        await pilot.pause()
-        await pilot.press("r")  # health → recommendations
-        await pilot.pause()
-        assert isinstance(app.screen, RecommendationsScreen)
-        await pilot.press("enter")  # first recommendation → its artifact
-        await pilot.pause()
-        assert isinstance(app.screen, ContextScreen)
-
-
-@pytest.mark.asyncio
-async def test_context_e_opens_external_editor(monkeypatch):
-    from textual.widgets import Static
-
-    import rac.explorer.editor as editor_mod
-
-    launched: list[list[str]] = []
-    monkeypatch.setattr(editor_mod, "_RUNNER", lambda cmd: launched.append(list(cmd)))
-    monkeypatch.setenv("EDITOR", "code")
-
-    app = ExplorerApp(str(FIXTURES / "valid_clean"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("enter")  # browser
-        await pilot.press("enter")  # context
-        await pilot.press("e")
-        await pilot.pause()
-        status = str(app.screen.query_one("#context-status", Static).content)
-        assert "Opened" in status and "code" in status
-        assert launched and launched[0][0] == "code"
-
-
-@pytest.mark.asyncio
-async def test_context_e_without_editor_shows_guidance(monkeypatch):
-    from textual.widgets import Static
-
-    monkeypatch.delenv("VISUAL", raising=False)
-    monkeypatch.delenv("EDITOR", raising=False)
-
-    app = ExplorerApp(str(FIXTURES / "valid_clean"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("enter")
-        await pilot.press("enter")
-        await pilot.press("e")
-        await pilot.pause()
-        status = str(app.screen.query_one("#context-status", Static).content)
-        assert "No editor configured" in status
-
-
-@pytest.mark.asyncio
-async def test_slash_import_previews_then_confirms_write(tmp_path):
-    from textual.widgets import Static
-
-    from rac.explorer.screens.import_ import ImportScreen
-
-    source = tmp_path / "incoming.md"
-    source.write_text("# Imported Doc\n\nhello\n", encoding="utf-8")
-    target = tmp_path / "result.md"
-
-    app = ExplorerApp(str(FIXTURES / "valid_clean"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("/")
-        await pilot.press(*f"import {source} {target}")
-        await pilot.press("enter")
-        await app.workers.wait_for_complete()
-        await pilot.pause()
-        assert isinstance(app.screen, ImportScreen)
-        panel = str(app.screen.query_one("#import-panel", Static).content)
-        assert "Preview" in panel and "Imported Doc" in panel
-        assert not target.exists()  # not written until confirmed
-
-        await pilot.press("y")
-        await pilot.pause()
-        assert target.read_text(encoding="utf-8") == "# Imported Doc\n\nhello\n"
-        assert "Imported" in str(app.screen.query_one("#import-panel", Static).content)
-
-
-@pytest.mark.asyncio
-async def test_slash_import_cancel_writes_nothing(tmp_path):
-    from rac.explorer.screens.import_ import ImportScreen
-
-    source = tmp_path / "incoming.md"
-    source.write_text("# Doc\n", encoding="utf-8")
-    target = tmp_path / "result.md"
-
-    app = ExplorerApp(str(FIXTURES / "valid_clean"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("/")
-        await pilot.press(*f"import {source} {target}")
-        await pilot.press("enter")
-        await app.workers.wait_for_complete()
-        await pilot.pause()
-        assert isinstance(app.screen, ImportScreen)
-        await pilot.press("escape")  # cancel before confirming
-        await pilot.pause()
-        assert not target.exists()
-
-
-@pytest.mark.asyncio
-async def test_slash_import_reports_unsupported(tmp_path):
-    from textual.widgets import Static
-
-    source = tmp_path / "thing.xyz"
-    source.write_text("x", encoding="utf-8")
-
-    app = ExplorerApp(str(FIXTURES / "valid_clean"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("/")
-        await pilot.press(*f"import {source}")
-        await pilot.press("enter")
-        await app.workers.wait_for_complete()
-        await pilot.pause()
-        panel = str(app.screen.query_one("#import-panel", Static).content)
-        assert "Import failed" in panel
-
-
-@pytest.mark.asyncio
-async def test_recommendations_export_previews_then_writes(tmp_path, monkeypatch):
-    from textual.widgets import Static
-
-    from rac.explorer.screens.confirm import ConfirmWriteScreen
-
-    monkeypatch.chdir(tmp_path)  # export defaults to recommendations.md in cwd
-    app = ExplorerApp(str(FIXTURES / "broken_rels"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("h")
-        await pilot.pause()
-        await pilot.press("r")  # recommendations
-        await pilot.pause()
-        await pilot.press("x")  # export → confirm screen
-        await pilot.pause()
-        assert isinstance(app.screen, ConfirmWriteScreen)
-        assert not (tmp_path / "recommendations.md").exists()  # preview only
-
-        await pilot.press("y")
-        await pilot.pause()
-        written = (tmp_path / "recommendations.md").read_text(encoding="utf-8")
-        assert "# Recommendations" in written
-        assert "Imported" in str(app.screen.query_one("#confirm-panel", Static).content)
-
-
-@pytest.mark.asyncio
-async def test_context_g_opens_relationships_and_traverses():
-    from textual.widgets import Static
-
-    from rac.explorer.screens.context import ContextScreen
-    from rac.explorer.screens.relationships import RelationshipScreen
-
-    app = ExplorerApp(str(FIXTURES / "valid_clean"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("enter")  # home → browser
-        await pilot.press("enter")  # first artifact → context
-        assert isinstance(app.screen, ContextScreen)
-        await pilot.press("g")
-        await pilot.pause()
-        assert isinstance(app.screen, RelationshipScreen)
-        panel = str(app.screen.query_one("#relationship-panel", Static).content)
-        assert "Relationships" in panel and "Impact" in panel and "Lineage" in panel
-        # Traverse to a connected artifact, then back out.
-        await pilot.press("enter")
-        await pilot.pause()
-        assert isinstance(app.screen, ContextScreen)
-        await pilot.press("escape")
-        assert isinstance(app.screen, RelationshipScreen)
-
-
-@pytest.mark.asyncio
-async def test_slash_relationships_opens_for_resolved_ref():
-    from rac.explorer.screens.relationships import RelationshipScreen
-
-    app = ExplorerApp(str(FIXTURES / "valid_clean"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("/")
-        await pilot.press(*"relationships adr-001")
-        await pilot.press("enter")
-        await pilot.pause()
-        assert isinstance(app.screen, RelationshipScreen)
-
-
-@pytest.mark.asyncio
-async def test_resume_reopens_last_artifact():
-    from rac.explorer.screens.context import ContextScreen
-    from rac.explorer.screens.repository import RepositoryScreen
-
-    directory = str(FIXTURES / "valid_clean")
-    # First session: open an artifact (records it), then quit.
-    app = ExplorerApp(directory)
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("enter")  # browser
-        await pilot.press("enter")  # context — records the artifact
-        assert isinstance(app.screen, ContextScreen)
-        recorded = app.screen.context.path
-        await pilot.press("q")
-
-    # Second session on the same repository: resume via `.`.
-    app2 = ExplorerApp(directory)
-    async with app2.run_test() as pilot:
-        await _settled_panel_text(app2, pilot)
-        assert isinstance(app2.screen, RepositoryScreen)
-        await pilot.press("full_stop")
-        await pilot.pause()
-        assert isinstance(app2.screen, ContextScreen)
-        assert app2.screen.context.path == recorded
-
-
-@pytest.mark.asyncio
-async def test_slash_preferences_shows_values_and_path():
-    from textual.widgets import OptionList
-
-    app = ExplorerApp(str(FIXTURES / "valid_clean"))
-    async with app.run_test() as pilot:
-        await _settled_panel_text(app, pilot)
-        await pilot.press("/")
-        await pilot.press(*"preferences")
-        await pilot.press("enter")
-        await pilot.pause()
-        results = app.screen.query_one(OptionList)
-        rendered = " ".join(str(opt.prompt) for opt in results._options)
-        assert "mascot" in rendered and "explorer.json" in rendered
-
-
-@pytest.mark.asyncio
 async def test_first_run_welcome_shows_mascot_when_enabled(fresh_first_run):
     app = ExplorerApp(str(FIXTURES / "valid_clean"))
     async with app.run_test() as pilot:
@@ -608,9 +597,214 @@ async def test_mascot_can_be_disabled(fresh_first_run, tmp_path, monkeypatch):
         assert "Repository found" in text  # but no information is lost
 
 
+# --- health and recommendations ----------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_h_binding_opens_health_view():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("h")
+        await pilot.pause()
+        assert app.screen.current_view == "view-health"
+        overview = str(app.screen.query_one("#health-overview", Static).content)
+        assert "Score" in overview
+        assert "Completeness" in overview and "Coverage" in overview
+        assert "✓ Healthy" in overview
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.screen.current_view == "view-home"
+
+
+@pytest.mark.asyncio
+async def test_slash_health_opens_health_view():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*"health")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.current_view == "view-health"
+
+
+@pytest.mark.asyncio
+async def test_health_attention_item_opens_context():
+    app = ExplorerApp(str(FIXTURES / "broken_rels"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("h")
+        await pilot.pause()
+        await pilot.press("enter")  # first attention item (highlighted)
+        await pilot.pause()
+        assert app.screen.current_view == "view-context"
+
+
+@pytest.mark.asyncio
+async def test_slash_recommendations_opens_view():
+    app = ExplorerApp(str(FIXTURES / "broken_rels"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*"recommendations")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.current_view == "view-recommendations"
+        listing = app.screen.query_one("#recommendations-list", OptionList)
+        assert listing.option_count >= 1  # at least the broken-relationship finding
+
+
+@pytest.mark.asyncio
+async def test_health_r_opens_recommendations_and_item_opens_context():
+    app = ExplorerApp(str(FIXTURES / "broken_rels"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("h")
+        await pilot.pause()
+        await pilot.press("r")  # health → recommendations
+        await pilot.pause()
+        assert app.screen.current_view == "view-recommendations"
+        await pilot.press("enter")  # first recommendation → its artifact
+        await pilot.pause()
+        assert app.screen.current_view == "view-context"
+
+
+@pytest.mark.asyncio
+async def test_findings_tab_shows_the_artifacts_findings():
+    app = ExplorerApp(str(FIXTURES / "broken_rels"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("h")
+        await pilot.pause()
+        await pilot.press("enter")  # the affected artifact's context view
+        await pilot.pause()
+        findings = str(app.screen.query_one("#findings-panel", Static).content)
+        assert "Impact:" in findings and "Action:" in findings
+
+
+# --- import and export ----------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_slash_import_previews_then_confirms_write(tmp_path):
+    source = tmp_path / "incoming.md"
+    source.write_text("# Imported Doc\n\nhello\n", encoding="utf-8")
+    target = tmp_path / "result.md"
+
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*f"import {source} {target}")
+        await pilot.press("enter")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert app.screen.current_view == "view-import"
+        panel = str(app.screen.query_one("#import-panel", Static).content)
+        assert "Preview" in panel and "Imported Doc" in panel
+        assert not target.exists()  # not written until confirmed
+
+        await pilot.press("y")
+        await pilot.pause()
+        assert target.read_text(encoding="utf-8") == "# Imported Doc\n\nhello\n"
+        assert "Imported" in str(app.screen.query_one("#import-panel", Static).content)
+
+
+@pytest.mark.asyncio
+async def test_slash_import_cancel_writes_nothing(tmp_path):
+    source = tmp_path / "incoming.md"
+    source.write_text("# Doc\n", encoding="utf-8")
+    target = tmp_path / "result.md"
+
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*f"import {source} {target}")
+        await pilot.press("enter")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert app.screen.current_view == "view-import"
+        await pilot.press("escape")  # cancel before confirming
+        await pilot.pause()
+        assert app.screen.current_view == "view-home"
+        assert not target.exists()
+
+
+@pytest.mark.asyncio
+async def test_slash_import_reports_unsupported(tmp_path):
+    source = tmp_path / "thing.xyz"
+    source.write_text("x", encoding="utf-8")
+
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*f"import {source}")
+        await pilot.press("enter")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        panel = str(app.screen.query_one("#import-panel", Static).content)
+        assert "Import failed" in panel
+
+
+@pytest.mark.asyncio
+async def test_recommendations_export_previews_then_writes(tmp_path, monkeypatch):
+    from rac.explorer.screens.confirm import ConfirmWriteScreen
+
+    monkeypatch.chdir(tmp_path)  # export defaults to recommendations.md in cwd
+    app = ExplorerApp(str(FIXTURES / "broken_rels"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("h")
+        await pilot.pause()
+        await pilot.press("r")  # recommendations
+        await pilot.pause()
+        await pilot.press("x")  # export → the confirm-write modal
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmWriteScreen)
+        assert not (tmp_path / "recommendations.md").exists()  # preview only
+
+        await pilot.press("y")
+        await pilot.pause()
+        written = (tmp_path / "recommendations.md").read_text(encoding="utf-8")
+        assert "# Recommendations" in written
+        assert "Imported" in str(app.screen.query_one("#confirm-panel", Static).content)
+        await pilot.press("escape")  # the modal pops; the frame is still there
+        await pilot.pause()
+        assert isinstance(app.screen, MainScreen)
+
+
+# --- continuity ---------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resume_reopens_last_artifact():
+    directory = str(FIXTURES / "valid_clean")
+    # First session: open an artifact (records it), then quit.
+    app = ExplorerApp(directory)
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await _open_first_artifact(app, pilot)
+        assert app.screen.current_view == "view-context"
+        recorded = app.screen.query_one(ContextView).context.path
+        await pilot.press("q")
+
+    # Second session on the same repository: resume via `.`.
+    app2 = ExplorerApp(directory)
+    async with app2.run_test() as pilot:
+        await _settled_panel_text(app2, pilot)
+        assert app2.screen.current_view == "view-home"
+        await pilot.press("full_stop")
+        await pilot.pause()
+        assert app2.screen.current_view == "view-context"
+        assert app2.screen.query_one(ContextView).context.path == recorded
+
+
 @pytest.mark.asyncio
 async def test_remains_responsive_at_repository_scale(tmp_path):
-    # Initiative 5: re-validate the 1000+ artifact target at the Explorer level.
+    # Initiative 6: re-validate the 1000+ artifact target against the tree.
     root = tmp_path / "large"
     root.mkdir()
     for i in range(600):
@@ -631,8 +825,11 @@ async def test_remains_responsive_at_repository_scale(tmp_path):
     async with app.run_test() as pilot:
         text = await _settled_panel_text(app, pilot)
         assert "Artifacts   1200" in text
-        await pilot.press("enter")  # browser renders the full list
+        # The sidebar mounts groups lazily; expanding one renders 600 rows.
+        sidebar = app.screen.query_one(NavigationSidebar)
+        sidebar.root.children[0].expand()
         await pilot.pause()
+        assert len(sidebar.root.children[0].children) == 600
     assert time.monotonic() - started < 60  # generous ceiling; catch regressions
 
 
