@@ -113,3 +113,26 @@ jobs:
 
       - name: Run ${{ matrix.battery.name }} battery
         run: python -m pytest -q ${{ matrix.battery.paths }}
+
+  # Coverage visibility (v0.7.14): one full-suite run on py3.11 with a
+  # term-missing report in the job log. Report-only — no threshold gate yet
+  # (measure first, gate later; see the v0.7.14 roadmap Non-Goals).
+  coverage:
+    name: coverage (py3.11, report-only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package with dev extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
+      - name: Run full suite with coverage
+        run: python -m pytest -q --cov=src/rac --cov-report=term-missing
