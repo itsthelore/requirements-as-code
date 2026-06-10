@@ -48,16 +48,24 @@ deliberate.
 
 RAC's CI test topology is governed by three rules.
 
-### 1. Tests run on merge to `main`, not on pull requests
+### 1. The full suite runs on merge to `main`; pull requests get a light pre-merge tier
+
+*Amended by v0.7.14. As originally accepted, pull requests received no automated
+feedback at all; the full battery grid ran only post-merge.*
 
 `ci.yml` triggers on `push:` to `main` (a merged PR or a direct push) and on
-`workflow_dispatch` (manual). It does **not** trigger on `pull_request`.
+`workflow_dispatch` (manual). It does **not** trigger on `pull_request` — the full
+battery × version grid remains merge-gated.
 
-The explicit, accepted consequence: **a pull request receives no automated test
-feedback before it merges.** A regression is caught by the post-merge run on `main`
-and then blocks the next release through the gate (rule 2), rather than being caught
-on the PR itself. `workflow_dispatch` is the escape hatch — the full battery grid can
-be run against any branch on demand from the Actions tab.
+Pull requests run a deliberately small pre-merge tier instead
+(`.github/workflows/pr-checks.yml`, v0.7.14): the static quality gates (`ruff
+check`, `ruff format --check`, `mypy src/`) plus a smoke battery (core, golden,
+dogfood on Python 3.11). This catches lint/type breakage, output-contract drift,
+and corpus damage before merge for roughly two minutes of Actions time, while the
+exhaustive grid still runs on `main`. A regression the smoke tier misses is caught
+by the post-merge run and then blocks the next release through the gate (rule 2).
+`workflow_dispatch` remains the escape hatch — the full grid can be run against any
+branch on demand from the Actions tab.
 
 Runs on `main` use `concurrency` with `cancel-in-progress: false`, so every merge is
 fully tested and a later merge does not cancel an in-flight run.
@@ -118,13 +126,16 @@ changes it on purpose, with this context in view, rather than by accident.
 
 ### Negative
 
-- Pull requests get no pre-merge test signal by default; regressions surface
-  post-merge on `main`. Mitigated by `workflow_dispatch` and the release gate.
+- Pull requests get only the smoke tier, not the full grid (v0.7.14; originally
+  no signal at all); a version-specific or service-specific regression outside the
+  smoke set still surfaces post-merge on `main`. Mitigated by `workflow_dispatch`
+  and the release gate.
 - More jobs per run (batteries × versions ≈ 33). They are short and run in parallel,
   but the checks list is longer.
 - The battery list must be kept in sync: a new `tests/test_*.py` that is not added to a
-  battery will not run in CI. Guarded by a coverage check at change time; a CI
-  self-check could enforce it later.
+  battery will not run in CI. Enforced since v0.7.14 by `tests/test_ci_batteries.py`
+  (in the core battery), which fails on orphaned, duplicated, or stale entries —
+  this gap went unnoticed for eight test files before the check existed.
 
 ## Alternatives Considered
 
@@ -142,8 +153,9 @@ Keep the `pull_request` trigger so PRs are checked before they merge.
 - Doubles runs (push + PR) and spends Actions minutes on branches that may be rebased
   or abandoned.
 
-Deferred, not rejected — to be reconsidered if outside contributors need pre-merge
-gating (see Review Date).
+Partially adopted by v0.7.14: pull requests run lint plus a smoke battery (rule 1),
+not the full grid. Full pre-merge gating remains deferred — to be reconsidered if
+outside contributors need it (see Review Date).
 
 ### Single job parameterized only by Python version (the prior shape)
 
