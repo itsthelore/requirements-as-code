@@ -393,6 +393,24 @@ def test_write_import_writes_and_refuses_overwrite(tmp_path):
     assert "Refusing to overwrite" in again
 
 
+def test_export_recommendations_renders_markdown_without_writing():
+    from rac.explorer.state import ImportPreview
+
+    adapter = ExplorerAdapter(str(FIXTURES / "broken_rels"))
+    adapter.load()
+    result = adapter.export_recommendations()
+    assert isinstance(result, ImportPreview)
+    assert result.converter == "export"
+    assert "# Recommendations" in result.markdown
+    assert "Impact:" in result.markdown and "Action:" in result.markdown
+
+
+def test_export_recommendations_empty_when_clean():
+    adapter = ExplorerAdapter(str(FIXTURES / "valid_clean"))
+    adapter.load()
+    assert adapter.export_recommendations() == "No recommendations to export"
+
+
 def test_cancelled_load_returns_none_not_an_error():
     token = CancellationToken()
     adapter = ExplorerAdapter(str(FIXTURES / "all_types"))

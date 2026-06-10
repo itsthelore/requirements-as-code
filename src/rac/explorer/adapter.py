@@ -389,6 +389,32 @@ class ExplorerAdapter:
             markdown=result.markdown,
         )
 
+    def export_recommendations(self, target: str = "recommendations.md") -> ImportPreview | str:
+        """Render current recommendations as Markdown for export (v0.8.4).
+
+        Returns an :class:`ImportPreview` to confirm and write, or a message
+        when there is nothing to export. Writing goes through
+        :meth:`write_import`, so it previews and never overwrites.
+        """
+        recommendations = self.recommendations_state()
+        if recommendations is None or recommendations.total == 0:
+            return "No recommendations to export"
+        lines = [f"# Recommendations — {recommendations.directory}", ""]
+        for category, rows in recommendations.groups:
+            lines.append(f"## {category}")
+            lines.append("")
+            for row in rows:
+                lines.append(f"- **{row.severity_label}** {row.identifier} — {row.finding}")
+                lines.append(f"  - Impact: {row.impact}")
+                lines.append(f"  - Action: {row.action}")
+            lines.append("")
+        return ImportPreview(
+            source="recommendations",
+            converter="export",
+            target=target,
+            markdown="\n".join(lines),
+        )
+
     def write_import(self, preview: ImportPreview) -> str:
         """Write a confirmed import; never overwrites (Initiative 4)."""
         path = Path(preview.target)
