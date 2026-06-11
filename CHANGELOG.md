@@ -8,6 +8,24 @@ details, release history over commit history.
 
 ### Added
 
+- Explorer live workspace and validation depth (v0.8.9): the Explorer now
+  watches the repository and reloads itself when artifacts change on disk —
+  a cheap path/mtime comparison every two seconds, with the sidebar keeping
+  its expansion, the open artifact keeping its tab and scroll position, and
+  the health chip updating; the watcher holds while a terminal editor owns
+  the screen and rescans the moment the Explorer resumes, so a saved edit
+  shows immediately. Invalid artifacts now explain themselves where they
+  are shown: a health attention item opens the artifact on its Inspection
+  tab — whose badge counts the validation diagnostics — and a
+  recommendation opens the artifact's Findings tab, which also gains an
+  Improvement group from the improve service (one suggestion per missing
+  section, with the schema's guidance question as the action; rendered,
+  never applied). The command surface deepens: `/schema` lists the
+  registered artifact types and `/schema <type>` renders the expected
+  structure; the palette offers the last artifacts you opened in this
+  repository before you type a character (Enter reopens one); and artifact
+  results can be narrowed by type with `f` — all → each type present → all.
+
 - Explorer command palette and settings (v0.8.8): pressing `/` summons a
   command palette — an input with a live, navigable menu below it that lists
   every command when empty, filters and completes them as you type, and
