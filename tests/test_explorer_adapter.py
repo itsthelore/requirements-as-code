@@ -523,3 +523,37 @@ def test_cancelled_load_returns_none_not_an_error():
 
     assert adapter.load(on_progress=cancel_immediately, cancel=token) is None
     assert adapter.repository is None
+
+
+# --- the watcher fingerprint (v0.8.9) -----------------------------------------
+
+
+def test_fingerprint_changes_on_edit_add_and_remove(tmp_path):
+    (tmp_path / "a.md").write_text("# A\n", encoding="utf-8")
+    adapter = ExplorerAdapter(str(tmp_path))
+    baseline = adapter.fingerprint()
+    assert baseline is not None and len(baseline) == 1
+
+    (tmp_path / "a.md").write_text("# A — edited\n", encoding="utf-8")
+    edited = adapter.fingerprint()
+    assert edited != baseline
+
+    (tmp_path / "b.md").write_text("# B\n", encoding="utf-8")
+    added = adapter.fingerprint()
+    assert added != edited and len(added) == 2
+
+    (tmp_path / "a.md").unlink()
+    removed = adapter.fingerprint()
+    assert removed != added and len(removed) == 1
+
+
+def test_fingerprint_ignores_non_markdown_and_dotted_dirs(tmp_path):
+    (tmp_path / "a.md").write_text("# A\n", encoding="utf-8")
+    adapter = ExplorerAdapter(str(tmp_path))
+    baseline = adapter.fingerprint()
+
+    (tmp_path / "notes.txt").write_text("not an artifact", encoding="utf-8")
+    hidden = tmp_path / ".cache"
+    hidden.mkdir()
+    (hidden / "c.md").write_text("# Hidden\n", encoding="utf-8")
+    assert adapter.fingerprint() == baseline

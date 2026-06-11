@@ -46,6 +46,9 @@ from rac.explorer.widgets.views import (
 # The sidebar hides below this width so the context panel keeps room to read.
 _SIDEBAR_MIN_WIDTH = 80
 
+# How often the live watcher compares the corpus files on disk (v0.8.9).
+_WATCH_INTERVAL = 2.0
+
 # View id → the status-line hint set and the panel title when no artifact is open.
 _VIEW_REGIONS = {
     "view-home": ("home", "Home"),
@@ -85,6 +88,11 @@ class MainScreen(Screen[None]):
         self.adapter = adapter
         self._history: list[str] = []
         self._last_focus: Widget | None = None
+        # Live reload (v0.8.9): the corpus snapshot the last load saw. None
+        # means "do not watch" — before the first successful load, after a
+        # load error, or while the application is suspended for an editor.
+        self._watch_baseline: tuple[tuple[str, int], ...] | None = None
+        self._watch_paused = False
 
     # --- frame ----------------------------------------------------------------
 
@@ -109,6 +117,7 @@ class MainScreen(Screen[None]):
         self.query_one(StatusLine).show_hints("home")
         self.query_one(NavigationSidebar).display = self.app.size.width >= _SIDEBAR_MIN_WIDTH
         self.query_one(HomeView).focus()
+        self.set_interval(_WATCH_INTERVAL, self._watch_tick)
         self.action_reload()
 
     def on_resize(self, event: Resize) -> None:
@@ -219,9 +228,18 @@ class MainScreen(Screen[None]):
             if not worker.is_cancelled:
                 self.app.call_from_thread(self.query_one(HomeView).show_progress, progress)
 
-        return self.adapter.load(on_progress=relay, cancel=token)
+        # Snapshot before loading: a save that lands mid-load differs from
+        # this baseline, so the next watch tick reloads again and converges.
+        baseline = self.adapter.fingerprint()
+        result = self.adapter.load(on_progress=relay, cancel=token)
+        self._watch_baseline = baseline if isinstance(result, RepositorySummaryState) else None
+        return result
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        if event.worker.group == "watch-scan":
+            if event.state == WorkerState.SUCCESS:
+                self._on_scan_result(event.worker.result)
+            return
         if event.worker.group != "repository-load":
             return
         home = self.query_one(HomeView)
@@ -231,12 +249,14 @@ class MainScreen(Screen[None]):
                 home.show_result(result)
                 self.query_one(NavigationSidebar).show_repository(self.adapter.browser_state())
                 self.query_one(StatusLine).show_summary(result)
+                self._refresh_current_view()
             elif isinstance(result, LoadErrorState):
                 home.show_error(result)
             # None — the load was cancelled; a fresh worker is taking over.
         elif event.state == WorkerState.ERROR:
             # The adapter is the recoverable boundary, so this is unexpected —
             # but the interface must still never crash (Initiative 6).
+            self._watch_baseline = None
             home.show_error(
                 LoadErrorState(
                     title="Unexpected failure",
@@ -245,10 +265,82 @@ class MainScreen(Screen[None]):
                 )
             )
 
+    # --- live reload (v0.8.9) ----------------------------------------------------
+
+    def pause_watching(self) -> None:
+        """Hold the watcher while the application is suspended for an editor."""
+        self._watch_paused = True
+
+    def resume_watching(self) -> None:
+        """Resume watching and scan immediately — the edit loop closes itself."""
+        self._watch_paused = False
+        self._watch_tick()
+
+    def _watch_tick(self) -> None:
+        if self._watch_paused or self._watch_baseline is None:
+            return
+        if any(w.group == "repository-load" and w.is_running for w in self.workers):
+            return
+        self._scan_corpus()
+
+    @work(thread=True, exclusive=True, group="watch-scan")
+    def _scan_corpus(self) -> tuple[tuple[str, int], ...] | None:
+        return self.adapter.fingerprint()
+
+    def _on_scan_result(self, snapshot: tuple[tuple[str, int], ...] | None) -> None:
+        # None is "could not list" — no signal. A load error since the scan
+        # started clears the baseline, which also stops the comparison.
+        if snapshot is None or self._watch_baseline is None:
+            return
+        if snapshot != self._watch_baseline:
+            self.action_reload()
+
+    def _refresh_current_view(self) -> None:
+        """Re-render whatever the user is looking at from the fresh load.
+
+        Reload (manual or watched) refreshes the open artifact, health, or
+        recommendations in place; an artifact that disappeared from the
+        repository falls back home rather than showing stale content.
+        """
+        current = self.current_view
+        if current == "view-context":
+            view = self.query_one(ContextView)
+            context = view.context
+            if context is None:
+                return
+            if self.adapter.context_state(context.path) is None:
+                self.show_view("view-home", record=False)
+                return
+            focused = self.app.focused
+            keep_focus = focused is not None and self._region_of(focused) == "context"
+            scroll_y = view.content_scroll_y
+            self.open_artifact(
+                context.path,
+                tab=view.active_tab,
+                reveal=False,
+                record=False,
+                focus=keep_focus,
+            )
+            view.restore_scroll(scroll_y)
+        elif current == "view-health":
+            health = self.adapter.health_state()
+            if health is not None:
+                self.query_one(HealthView).show_health(health)
+        elif current == "view-recommendations":
+            recommendations = self.adapter.recommendations_state()
+            if recommendations is not None:
+                self.query_one(RecommendationsView).show_recommendations(recommendations)
+
     # --- navigation ---------------------------------------------------------------
 
     def open_artifact(
-        self, path: str, *, tab: str | None = None, reveal: bool = True, record: bool = True
+        self,
+        path: str,
+        *,
+        tab: str | None = None,
+        reveal: bool = True,
+        record: bool = True,
+        focus: bool = True,
     ) -> None:
         context = self.adapter.context_state(path)
         if context is None:
@@ -275,7 +367,7 @@ class MainScreen(Screen[None]):
         self.query_one(ContextView).show_artifact(
             context, markdown, relationships, findings, tab=tab
         )
-        self.show_view("view-context", record=False)
+        self.show_view("view-context", record=False, focus=focus)
         sidebar = self.query_one(NavigationSidebar)
         if reveal:
             sidebar.reveal(path)

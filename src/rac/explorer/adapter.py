@@ -13,6 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from rac.core.frontmatter import split_frontmatter
+from rac.core.fs import find_markdown_files
 from rac.core.operations import CancelToken, OperationCancelled, Progress
 from rac.services.ingest import ConversionError, UnsupportedDocument, ingest
 from rac.services.repository import Artifact, Repository, load_repository
@@ -230,6 +231,26 @@ class ExplorerAdapter:
 
         self.repository = repository
         return self._summary(repository)
+
+    def fingerprint(self) -> tuple[tuple[str, int], ...] | None:
+        """A snapshot of the corpus files for change detection (v0.8.9).
+
+        Paths and mtimes from the same discovery the loader uses
+        (``find_markdown_files``) — no parsing, so a scan stays cheap enough
+        to repeat on a timer. ``None`` means the directory could not be
+        listed; callers treat that as no signal, never as a change.
+        """
+        try:
+            paths = find_markdown_files(self.directory, recursive=self.recursive)
+        except OSError:
+            return None
+        entries: list[tuple[str, int]] = []
+        for path in paths:
+            try:
+                entries.append((str(path), path.stat().st_mtime_ns))
+            except OSError:
+                continue  # deleted between listing and stat; the next scan settles it
+        return tuple(entries)
 
     @staticmethod
     def _summary(repository: Repository) -> RepositorySummaryState:
