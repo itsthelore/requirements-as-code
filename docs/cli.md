@@ -366,10 +366,10 @@ it shows is also available through `rac portfolio`, `rac index`, `rac resolve`,
   commands into the input); any other text shows live artifact matches —
   Enter quick-opens the highlighted one — plus a "search all results" row.
   Commands: `open <ref>` · `find <query> [type]` · `browse [type]` ·
-  `health` · `recommendations` · `import <source> [target]` ·
-  `relationships <ref>` · `resume` · `schema [type]` · `settings` · `home` ·
-  `help` · `quit` — anything else is a search, resolved with `rac resolve` /
-  `rac find` semantics. Full results render in the context panel (the layout
+  `health` · `stats` · `recommendations` · `new <type> <path>` ·
+  `import <source> [target]` · `relationships <ref>` · `resume` ·
+  `schema [type]` · `settings` · `home` · `help` · `quit` — anything else is
+  a search, resolved with `rac resolve` / `rac find` semantics. Full results render in the context panel (the layout
   never jumps), where `f` narrows artifact results by type — all → each type
   present → all. `/browse <type>` lists that type in the results panel in
   every grouping mode; bare `/browse` focuses the sidebar. `/schema` lists
@@ -414,6 +414,17 @@ it shows is also available through `rac portfolio`, `rac index`, `rac resolve`,
   `/import <source> [target]` converts a document via the ingest service,
   previews the Markdown, and writes it only after you confirm with `y`
   (never overwriting). Long conversions report progress.
+  `/new <type> <path>` starts an artifact from its canonical template: the
+  preview shows the sections with the ID noted as assigned on write, `y`
+  confirms, and the write goes through the same Core service as `rac new` —
+  the ID is minted against the repository index, existing files refuse,
+  missing directories refuse, and an uninitialized repository points you at
+  `rac init`. On success the Explorer reloads and opens the new artifact,
+  ready for `e`; bare `/new` lists the creatable types.
+- **Stats:** `/stats` opens a portfolio dashboard — per-type counts with
+  validity, requirement/metric/risk totals, decision status and category
+  breakdowns, and relationship counts — the same facts `rac stats` reports,
+  collected off the UI thread on request.
 - **Live reload:** Explorer compares the corpus files on disk every two
   seconds (paths and mtimes only — no parsing) and reloads when something
   changed: the sidebar keeps its expansion and cursor, the open artifact
