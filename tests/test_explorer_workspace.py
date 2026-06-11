@@ -14,7 +14,7 @@ from rac.explorer.preferences import (
     preferences_path,
     save_preferences,
 )
-from rac.explorer.workspace import load_workspace, save_workspace, workspace_path
+from rac.explorer.workspace import Workspace, load_workspace, save_workspace, workspace_path
 
 
 @pytest.fixture(autouse=True)
@@ -110,3 +110,35 @@ def test_animations_off_uses_steady_frame_but_keeps_meaning():
     # The label (meaning) is identical; only the lantern glyph differs.
     assert mascot.label(mascot.SEARCHING) in animated
     assert mascot.label(mascot.SEARCHING) in static
+
+
+# --- recent artifacts (v0.8.9) --------------------------------------------------
+
+
+def test_recent_artifacts_record_dedupe_and_cap(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    workspace = Workspace()
+    for i in range(10):
+        workspace.record_artifact("/repo", f"a{i}.md")
+    workspace.record_artifact("/repo", "a3.md")  # re-open moves to the front
+    recents = workspace.recent_artifacts_for("/repo")
+    assert recents[0] == "a3.md"
+    assert len(recents) == 8  # capped
+    assert recents.count("a3.md") == 1  # deduped
+
+
+def test_recent_artifacts_round_trip_and_old_state_loads(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    workspace = Workspace()
+    workspace.record_artifact("/repo", "a.md")
+    workspace.record_artifact("/repo", "b.md")
+    save_workspace(workspace)
+    loaded = load_workspace()
+    assert loaded.recent_artifacts_for("/repo") == ["b.md", "a.md"]
+
+    # A state file written before v0.8.9 has no recent_artifacts key.
+    payload = {"recent": ["/repo"], "last_artifact": {}, "last_view": {}}
+    workspace_path().write_text(json.dumps(payload), encoding="utf-8")
+    old = load_workspace()
+    assert old.recent == ["/repo"]
+    assert old.recent_artifacts_for("/repo") == []

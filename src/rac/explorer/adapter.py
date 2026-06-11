@@ -15,6 +15,7 @@ from pathlib import Path
 from rac.core.frontmatter import split_frontmatter
 from rac.core.fs import find_markdown_files
 from rac.core.operations import CancelToken, OperationCancelled, Progress
+from rac.core.schema import available_schemas, schema_reference
 from rac.services.improve import improve_file
 from rac.services.ingest import ConversionError, UnsupportedDocument, ingest
 from rac.services.repository import Artifact, Repository, load_repository
@@ -196,6 +197,19 @@ class ExplorerAdapter:
     def resume_view(self) -> str | None:
         """The last recorded view for this repository, if any."""
         return self.workspace.resume_view(self.directory)
+
+    def recent_rows(self, limit: int = 5) -> tuple[ArtifactRow, ...]:
+        """Recently opened artifacts here that still exist, newest first (v0.8.9)."""
+        repository = self.repository
+        if repository is None:
+            return ()
+        by_path = {a.path: a for a in repository.artifacts}
+        rows = tuple(
+            _row(by_path[path])
+            for path in self.workspace.recent_artifacts_for(self.directory)
+            if path in by_path
+        )
+        return rows[:limit]
 
     def resume_path(self) -> str | None:
         """The last artifact opened here, if it still exists in the load."""
@@ -428,6 +442,52 @@ class ExplorerAdapter:
             groups=groups,
             total=len(rows),
         )
+
+    def schema_overview(self) -> tuple[tuple[str, str], ...]:
+        """(type, one-line structure summary) for every registered schema (v0.8.9).
+
+        Reference data straight from the core schema registry — the same
+        facts `rac schema` reports (ADR-015). Needs no loaded repository.
+        """
+        rows: list[tuple[str, str]] = []
+        for name in available_schemas():
+            ref = schema_reference(name)
+            if ref is None:  # pragma: no cover - registry names always resolve
+                continue
+            rows.append(
+                (
+                    name,
+                    f"{_plural(len(ref.required), 'required section')}, "
+                    f"{len(ref.recommended)} recommended",
+                )
+            )
+        return tuple(rows)
+
+    def schema_detail(self, name: str) -> str | None:
+        """The expected structure of artifact type ``name``, or None if unknown."""
+        ref = schema_reference(name.strip().casefold())
+        if ref is None:
+            return None
+        lines = [f"{ref.display} ({ref.type})", "", "Required sections"]
+        lines.extend(self._schema_section(ref, s) for s in ref.required)
+        if ref.recommended:
+            lines.extend(["", "Recommended sections"])
+            lines.extend(self._schema_section(ref, s) for s in ref.recommended)
+        if ref.optional:
+            lines.extend(["", "Optional sections"])
+            lines.extend(self._schema_section(ref, s) for s in ref.optional)
+        return "\n".join(lines)
+
+    @staticmethod
+    def _schema_section(ref, section: str) -> str:
+        description = ref.descriptions.get(section)
+        values = ref.metadata.get(section)
+        line = f"  {section.title()}"
+        if description:
+            line += f" — {description}"
+        if values:
+            line += f" ({' | '.join(values)})"
+        return line
 
     def improvement_rows(self, path: str) -> tuple[RecommendationRow, ...]:
         """Improvement suggestions for the artifact at ``path`` (v0.8.9).

@@ -38,6 +38,15 @@ def _command_option(spec: commands.CommandSpec) -> Option:
     return Option(label, id=f"cmd:{spec.name}")
 
 
+def _artifact_option(row) -> Option:
+    tag, colour = type_tag(row.type)
+    label = Text()
+    label.append(tag, style=f"bold {colour}")
+    label.append(f" {row.title or row.id}")
+    label.append(f"  {row.status_label}", style="dim")
+    return Option(label, id=f"path:{row.path}")
+
+
 class CommandPalette(Vertical):
     """Input on top, menu below; `↑ ↓` drive the menu while typing continues."""
 
@@ -102,20 +111,21 @@ class CommandPalette(Vertical):
         stripped = text.strip().lstrip("/").strip()
         options: list[Option] = []
         if not stripped:
-            options = [_command_option(spec) for spec in commands.REGISTRY]
+            # The artifacts the user actually works in come first (v0.8.9);
+            # Enter reopens one. The registry follows, labelled, in full.
+            recents = self.adapter.recent_rows()
+            if recents:
+                options.append(Option(Text("Recent", style="dim"), disabled=True))
+                options.extend(_artifact_option(row) for row in recents)
+                options.append(Option(Text("Commands", style="dim"), disabled=True))
+            options.extend(_command_option(spec) for spec in commands.REGISTRY)
         else:
             matched = commands.suggestions(stripped)
             if matched:
                 options = [_command_option(spec) for spec in matched]
             else:
                 lookup = self.adapter.search_rows(stripped)
-                for row in lookup.rows[:_MATCH_LIMIT]:
-                    tag, colour = type_tag(row.type)
-                    label = Text()
-                    label.append(tag, style=f"bold {colour}")
-                    label.append(f" {row.title or row.id}")
-                    label.append(f"  {row.status_label}", style="dim")
-                    options.append(Option(label, id=f"path:{row.path}"))
+                options.extend(_artifact_option(row) for row in lookup.rows[:_MATCH_LIMIT])
                 options.append(Option(f"Search all results for '{stripped}'", id="route:search"))
         menu.add_options(options)
         for index in range(menu.option_count):
