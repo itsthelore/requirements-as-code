@@ -6,6 +6,10 @@ not lost; neither is a defect.
 
 ## 1. Recommendation "impact" copy lives in Explorer, not Core
 
+**Scoped into v0.8.11** (explorer-followups): `ReviewIssue` gains an
+additive `impact` field owned by Core; the Explorer renders it and drops
+its own copy.
+
 Deferred from v0.8.3 (recommendations).
 
 Today each recommendation's *impact* line ("why it matters") is fixed
@@ -25,10 +29,10 @@ service grows or another consumer needs impact.
 
 ## 2. Editor preference persistence and terminal-editor support
 
-**Landing in v0.8.8** (explorer-command-palette): the `editor` preference in
+**Landed in v0.8.8** (explorer-command-palette): the `editor` preference in
 `/settings` with preference → `$VISUAL` → `$EDITOR` resolution, and a
-suspend/resume path for terminal editors. The first-run editor prompt
-remains deferred.
+suspend/resume path for terminal editors. The remaining piece — the
+first-run editor prompt — is **scoped into v0.8.11** (explorer-followups).
 
 Deferred from v0.8.4 (action workflows) and v0.8.6 (preferences).
 
@@ -51,6 +55,7 @@ behind editor-type detection.
 
 ## References
 
+- rac/roadmaps/v0.8.x-explorer/v0.8.11-explorer-followups.md
 - rac/roadmaps/v0.8.x-explorer/v0.8.3-explorer-recommendations.md
 - rac/roadmaps/v0.8.x-explorer/v0.8.4-explorer-action-workflow.md
 - rac/roadmaps/v0.8.x-explorer/v0.8.6-explorer-maturity.md
