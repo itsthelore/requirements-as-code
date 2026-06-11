@@ -73,7 +73,14 @@ def launch_editor(widget, adapter: ExplorerAdapter, path: str) -> editor_mod.Edi
     """
     editor = adapter.resolved_editor()
     if editor is not None and editor_mod.is_terminal_editor(editor):
+        # The live watcher (v0.8.9) holds while the editor owns the terminal
+        # and rescans the moment it returns, so the saved edit shows at once.
+        # Duck-typed: importing MainScreen here would be circular.
+        screen = widget.screen
+        pause = getattr(screen, "pause_watching", lambda: None)
+        resume = getattr(screen, "resume_watching", lambda: None)
         try:
+            pause()
             with widget.app.suspend():
                 return adapter.open_in_editor(path, blocking=True)
         except SuspendNotSupported:
@@ -84,6 +91,8 @@ def launch_editor(widget, adapter: ExplorerAdapter, path: str) -> editor_mod.Edi
                     "suspend. Configure a GUI editor in /settings."
                 ),
             )
+        finally:
+            resume()
     return adapter.open_in_editor(path)
 
 
@@ -419,6 +428,21 @@ class ContextView(Vertical):
             self.query_one("#content-scroll", VerticalScroll).focus()
         else:
             self.query_one(Tabs).focus()
+
+    @property
+    def active_tab(self) -> str:
+        return self.query_one(TabbedContent).active
+
+    @property
+    def content_scroll_y(self) -> float:
+        return self.query_one("#content-scroll", VerticalScroll).scroll_y
+
+    def restore_scroll(self, y: float) -> None:
+        """Put the document back where it was after an in-place refresh."""
+        pane = self.query_one("#content-scroll", VerticalScroll)
+        # After the Markdown re-renders: the target offset only exists once
+        # the new content has a height.
+        self.call_after_refresh(lambda: pane.scroll_to(y=y, animate=False))
 
     def action_scroll_content(self, direction: int) -> None:
         self.query_one("#content-scroll", VerticalScroll).scroll_relative(

@@ -1319,3 +1319,116 @@ async def test_app_bar_shows_short_version_and_tilde_path(tmp_path, monkeypatch)
     inside = tmp_path / "work" / "repo"
     assert _tilde(str(inside)) == "~/work/repo"
     assert _tilde("rac/") == "rac/"  # non-home paths stay as they are
+
+
+# --- live reload (v0.8.9) -------------------------------------------------------
+
+
+def _copy_fixture(name: str, tmp_path: Path) -> Path:
+    import shutil
+
+    target = tmp_path / name
+    shutil.copytree(FIXTURES / name, target)
+    return target
+
+
+async def _force_scan(app: ExplorerApp, pilot) -> None:
+    """One watcher cycle, deterministically (the 2s interval is too slow here)."""
+    screen = app.screen
+    assert isinstance(screen, MainScreen)
+    screen.resume_watching()
+    await app.workers.wait_for_complete()  # the scan
+    await pilot.pause()
+    await app.workers.wait_for_complete()  # the reload it may have triggered
+    await pilot.pause()
+
+
+@pytest.mark.asyncio
+async def test_watcher_reloads_when_an_artifact_changes_on_disk(tmp_path):
+    repo = _copy_fixture("valid_clean", tmp_path)
+    app = ExplorerApp(str(repo))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        (repo / "note.md").write_text("# A New Note\n", encoding="utf-8")
+        text = str(app.screen.query_one(RepositoryPanel).content)
+        assert "Artifacts      2" in text  # not yet seen
+        await _force_scan(app, pilot)
+        text = str(app.screen.query_one(RepositoryPanel).content)
+        assert "Artifacts      3" in text
+
+
+@pytest.mark.asyncio
+async def test_watcher_refreshes_the_open_artifact_in_place(tmp_path):
+    repo = _copy_fixture("valid_clean", tmp_path)
+    app = ExplorerApp(str(repo))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await _open_first_artifact(app, pilot)
+        view = app.screen.query_one(ContextView)
+        assert view.context is not None
+        path = Path(view.context.path)
+        original = path.read_text(encoding="utf-8")
+
+        path.write_text(original + "\nA fresh paragraph saved outside.\n", encoding="utf-8")
+        await _force_scan(app, pilot)
+
+        assert app.screen.current_view == "view-context"
+        assert view.context is not None and view.context.path == str(path)
+        document = app.screen.query_one("#artifact-markdown", Markdown)
+        assert "A fresh paragraph saved outside." in document.source
+
+
+@pytest.mark.asyncio
+async def test_watcher_falls_back_home_when_the_open_artifact_disappears(tmp_path):
+    repo = _copy_fixture("valid_clean", tmp_path)
+    app = ExplorerApp(str(repo))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await _open_first_artifact(app, pilot)
+        view = app.screen.query_one(ContextView)
+        assert view.context is not None
+        Path(view.context.path).unlink()
+
+        await _force_scan(app, pilot)
+        assert app.screen.current_view == "view-home"
+
+
+@pytest.mark.asyncio
+async def test_watcher_is_quiet_while_paused_and_before_first_load(tmp_path):
+    repo = _copy_fixture("valid_clean", tmp_path)
+    app = ExplorerApp(str(repo))
+    async with app.run_test() as pilot:
+        screen = app.screen
+        assert isinstance(screen, MainScreen)
+        await _settled_panel_text(app, pilot)
+
+        screen.pause_watching()
+        (repo / "note.md").write_text("# A New Note\n", encoding="utf-8")
+        screen._watch_tick()
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        text = str(screen.query_one(RepositoryPanel).content)
+        assert "Artifacts      2" in text  # paused: the change was not picked up
+
+        await _force_scan(app, pilot)  # resume scans immediately
+        text = str(screen.query_one(RepositoryPanel).content)
+        assert "Artifacts      3" in text
+
+
+@pytest.mark.asyncio
+async def test_watcher_does_not_run_after_a_load_error(tmp_path):
+    bad = tmp_path / "bad.md"
+    bad.write_bytes(b"\xff\xfe not utf-8 \xff")
+    app = ExplorerApp(str(tmp_path))
+    async with app.run_test() as pilot:
+        screen = app.screen
+        assert isinstance(screen, MainScreen)
+        await _settled_panel_text(app, pilot)
+        assert screen._watch_baseline is None  # load failed: nothing to compare
+
+        bad.write_text("# Repaired Note\n", encoding="utf-8")
+        screen._watch_tick()
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        text = str(screen.query_one(RepositoryPanel).content)
+        assert "Could not load repository" in text  # only `r` recovers
