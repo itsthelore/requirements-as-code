@@ -25,6 +25,7 @@ from rac.explorer import firstrun, mascot
 from rac.explorer.adapter import ExplorerAdapter
 from rac.explorer.preferences import GROUPING_FLAT, GROUPING_TYPE, preferences_path
 from rac.explorer.state import (
+    ArtifactRow,
     ContextState,
     HealthState,
     ImportPreview,
@@ -742,22 +743,83 @@ class ResultsView(Vertical):
     """Search results, lookups, and help — in the context region.
 
     Results render here rather than in a modal, so the layout never jumps
-    (DESIGN-command-surface).
+    (DESIGN-command-surface). Artifact results can be narrowed by type from
+    the keyboard: `f` cycles all → each type present → all (v0.8.9). The
+    filter is presentation state only — it re-filters rows the search
+    already returned.
     """
+
+    BINDINGS = [Binding("f", "cycle_filter", "Filter")]
 
     def __init__(self) -> None:
         super().__init__(id="view-results")
         self.border_title = "Results"
+        self._rows: tuple[ArtifactRow, ...] = ()
+        self._message: str | None = None
+        self._filter: str | None = None
 
     def compose(self) -> ComposeResult:
+        filter_line = Static(id="results-filter")
+        filter_line.display = False
+        yield filter_line
         yield OptionList(id="command-results")
 
     def show_options(self, options: list[Option | None], *, focus_first: bool = False) -> None:
+        """Informational listings (help, examples, schema) — not filterable."""
+        self._rows = ()
+        self._message = None
+        self._filter = None
+        self.query_one("#results-filter", Static).display = False
         listing = self.query_one(OptionList)
         listing.clear_options()
         listing.add_options(options)
         if focus_first:
             _highlight_first(listing)
+
+    def show_lookup(self, rows: tuple[ArtifactRow, ...], message: str | None = None) -> None:
+        """Artifact results; `f` narrows them by type."""
+        self._rows = rows
+        self._message = message
+        self._filter = None
+        self._render_rows()
+
+    def _types(self) -> list[str]:
+        seen: list[str] = []
+        for row in self._rows:
+            if row.type not in seen:
+                seen.append(row.type)
+        return seen
+
+    def action_cycle_filter(self) -> None:
+        types = self._types()
+        if len(types) < 2:
+            return
+        order: list[str | None] = [None, *types]
+        self._filter = order[(order.index(self._filter) + 1) % len(order)]
+        self._render_rows()
+
+    def _render_rows(self) -> None:
+        shown = [row for row in self._rows if self._filter in (None, row.type)]
+        options: list[Option] = []
+        if self._message:
+            options.append(Option(self._message, disabled=True))
+        options.extend(
+            Option(f"{row.status_label}  {row.title or row.id}  ({row.type})", id=row.path)
+            for row in shown
+        )
+        listing = self.query_one(OptionList)
+        listing.clear_options()
+        listing.add_options(options)
+        _highlight_first(listing)
+        filter_line = self.query_one("#results-filter", Static)
+        if len(self._types()) > 1:
+            filter_line.display = True
+            filter_line.update(
+                f"Filter: {self._filter or 'all'} · {len(shown)} of {len(self._rows)}"
+                " · f cycles types"
+            )
+        else:
+            filter_line.display = False
 
     def take_focus(self) -> None:
         self.query_one(OptionList).focus()

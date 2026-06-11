@@ -462,20 +462,21 @@ class MainScreen(Screen[None]):
         self._show_results(options)
 
     def _show_lookup(self, lookup) -> None:
+        if lookup.rows:
+            # Artifact rows render through the filterable path (v0.8.9).
+            self.query_one(ResultsView).show_lookup(lookup.rows, lookup.message)
+            self.show_view("view-results", focus=True)
+            self.query_one("#context-region").border_title = f"Results · {len(lookup.rows)}"
+            return
         options: list[Option | None] = []
-        if not lookup.rows:
-            # The mascot's empty state keeps zero-result moments calm
-            # (text label included, so `mascot = false` loses nothing).
-            if self.adapter.preferences.mascot:
-                figure = mascot.figure(mascot.EMPTY, animations=self.adapter.preferences.animations)
-                options.append(Option(figure, disabled=True))
+        # The mascot's empty state keeps zero-result moments calm
+        # (text label included, so `mascot = false` loses nothing).
+        if self.adapter.preferences.mascot:
+            figure = mascot.figure(mascot.EMPTY, animations=self.adapter.preferences.animations)
+            options.append(Option(figure, disabled=True))
         if lookup.message:
             options.append(Option(lookup.message, disabled=True))
-        options.extend(
-            Option(f"{row.status_label}  {row.title or row.id}  ({row.type})", id=row.path)
-            for row in lookup.rows
-        )
-        self._show_results(options, focus=bool(lookup.rows), count=len(lookup.rows))
+        self._show_results(options, count=0)
 
     def summon_palette(self) -> None:
         self.query_one(CommandPalette).show()
@@ -522,6 +523,20 @@ class MainScreen(Screen[None]):
         elif invocation.command == "recommendations":
             if not self._show_recommendations():
                 self._show_message("Repository not loaded yet")
+        elif invocation.command == "schema":
+            if not invocation.args:
+                self._show_results(
+                    [
+                        Option(f"{name:<14} {summary}", disabled=True)
+                        for name, summary in self.adapter.schema_overview()
+                    ]
+                )
+                return
+            detail = self.adapter.schema_detail(invocation.args)
+            if detail is None:
+                self._show_message(f"Unknown artifact type: {invocation.args} — try /schema")
+                return
+            self._show_results([Option(detail, disabled=True)])
         elif invocation.command == "settings":
             self.query_one(SettingsView).show_settings()
             self.show_view("view-settings")

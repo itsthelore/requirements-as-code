@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from textual.widgets import Input, Markdown, OptionList, Static, TabbedContent
 
-from rac.explorer import firstrun, mascot
+from rac.explorer import commands, firstrun, mascot
 from rac.explorer.app import ExplorerApp
 from rac.explorer.screens.main import MainScreen
 from rac.explorer.widgets import RepositoryPanel
@@ -209,7 +209,7 @@ async def test_slash_summons_palette_and_esc_restores_focus():
         assert isinstance(app.focused, Input)
         # Empty input teaches: the whole registry, first row highlighted.
         menu = palette.query_one("#palette-menu", OptionList)
-        assert menu.option_count == 12
+        assert menu.option_count == len(commands.REGISTRY)
         assert menu.highlighted == 0
 
         await pilot.press("escape")
@@ -689,7 +689,7 @@ async def test_slash_help_lists_registry():
         await pilot.pause()
         assert app.screen.current_view == "view-results"
         results = app.screen.query_one("#command-results", OptionList)
-        assert results.option_count == 12  # the whole registry, nothing more
+        assert results.option_count == len(commands.REGISTRY)  # the whole registry, nothing more
 
 
 @pytest.mark.asyncio
@@ -1265,7 +1265,7 @@ async def test_question_mark_opens_help():
         await pilot.pause()
         assert app.screen.current_view == "view-results"
         results = app.screen.query_one("#command-results", OptionList)
-        assert results.option_count == 12  # the whole registry
+        assert results.option_count == len(commands.REGISTRY)  # the whole registry
 
 
 @pytest.mark.asyncio
@@ -1502,3 +1502,97 @@ async def test_findings_tab_carries_improvement_suggestions(tmp_path):
         # The badge counts review findings and improvements together.
         label = str(app.screen.query_one(TabbedContent).get_tab("tab-findings").label)
         assert label.startswith("Findings (")
+
+
+# --- command surface depth (v0.8.9) -----------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_schema_command_lists_types_and_renders_detail():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*"schema")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.current_view == "view-results"
+        results = app.screen.query_one("#command-results", OptionList)
+        listing = "\n".join(
+            str(results.get_option_at_index(i).prompt) for i in range(results.option_count)
+        )
+        assert "decision" in listing and "requirement" in listing
+
+        await pilot.press("/")
+        await pilot.press(*"schema decision")
+        await pilot.press("enter")
+        await pilot.pause()
+        results = app.screen.query_one("#command-results", OptionList)
+        detail = str(results.get_option_at_index(0).prompt)
+        assert "Required sections" in detail
+        assert "Status" in detail
+
+
+@pytest.mark.asyncio
+async def test_schema_command_reports_unknown_types():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*"schema nonsense")
+        await pilot.press("enter")
+        await pilot.pause()
+        results = app.screen.query_one("#command-results", OptionList)
+        listing = "\n".join(
+            str(results.get_option_at_index(i).prompt) for i in range(results.option_count)
+        )
+        assert "Unknown artifact type: nonsense" in listing
+
+
+@pytest.mark.asyncio
+async def test_palette_offers_recent_artifacts_before_typing():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await _open_first_artifact(app, pilot)
+        await pilot.press("escape")  # back home so the palette opens fresh
+        await pilot.pause()
+
+        await pilot.press("/")
+        palette = app.screen.query_one(CommandPalette)
+        menu = palette.query_one("#palette-menu", OptionList)
+        labels = [str(menu.get_option_at_index(i).prompt) for i in range(menu.option_count)]
+        assert any("Recent" in label for label in labels)
+        # More rows than the registry alone: recents plus their headers.
+        assert menu.option_count > len(commands.REGISTRY)
+        # The first selectable row is the most recent artifact — Enter reopens it.
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.current_view == "view-context"
+
+
+@pytest.mark.asyncio
+async def test_results_filter_cycles_types_with_f():
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))  # one requirement, one decision
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.press("/")
+        await pilot.press(*"find 001")  # matches both artifacts
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.screen.current_view == "view-results"
+        results = app.screen.query_one("#command-results", OptionList)
+        assert results.option_count == 2
+        filter_line = app.screen.query_one("#results-filter", Static)
+        assert filter_line.display
+        assert "Filter: all · 2 of 2" in str(filter_line.content)
+
+        await pilot.press("f")  # all → first type present
+        await pilot.pause()
+        assert results.option_count == 1
+        assert "1 of 2" in str(filter_line.content)
+
+        await pilot.press("f", "f")  # second type → back to all
+        await pilot.pause()
+        assert results.option_count == 2
+        assert "Filter: all" in str(filter_line.content)
