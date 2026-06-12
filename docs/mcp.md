@@ -186,7 +186,7 @@ explicit flag in your client's server configuration:
 ```json
 {
   "mcpServers": {
-    "rac-guide": {
+    "lore": {
       "command": "rac",
       "args": ["mcp", "--root", "/path/to/repo", "--telemetry"]
     }
