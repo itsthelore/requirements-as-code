@@ -13,6 +13,7 @@ Commands:
     rac portfolio <directory> [--json] [--top-level]
     rac index [directory] [--json] [--top-level]
     rac explorer [directory] [--top-level]
+    rac mcp [--root PATH]
     rac new <artifact-type> <output-path> [--json]
     rac templates [--json]
     rac init [directory] [--key KEY] [--json]
@@ -25,7 +26,8 @@ Exit codes:
        not; --validate with all references resolved; portfolio summary produced;
        index produced; artifact created; templates listed; find with or without
        matches; migration or dry run completed, even with nothing to migrate;
-       explorer session quit by the user)
+       explorer session quit by the user; mcp server shutdown on client
+       disconnect)
     1  validate: errors found; stats: no valid known artifacts; ingest:
        conversion failed; relationships --validate: broken/ambiguous/self
        references or duplicate identifiers found; review: invalid artifacts
@@ -36,7 +38,8 @@ Exit codes:
        config or ID generation exhausted
     2  usage / IO error (file not found, not a directory, unsupported type,
        refuse-to-overwrite, missing output directory, repository not
-       initialized, invalid repository key, explorer extra not installed)
+       initialized, invalid repository key, explorer extra not installed,
+       mcp --root not a directory)
 """
 
 from __future__ import annotations
@@ -408,6 +411,18 @@ def cmd_explorer(args: argparse.Namespace) -> int:
     except ExplorerUnavailable as exc:
         print(f"rac: {exc}", file=sys.stderr)
         raise SystemExit(EXIT_USAGE) from None
+
+
+def cmd_mcp(args: argparse.Namespace) -> int:
+    if not Path(args.root).is_dir():
+        print(f"rac: not a directory: {args.root}", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE)
+    # Imported lazily: the MCP SDK is only needed when serving, and the base
+    # CLI must not pay its import cost for every other command. stdout belongs
+    # to the MCP protocol, so any diagnostics here go to stderr.
+    from rac.mcp.server import run_server
+
+    return run_server(args.root)
 
 
 def cmd_new(args: argparse.Namespace) -> int:
@@ -806,6 +821,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Recurse into subdirectories (the default; accepted for clarity).",
     )
     p_explorer.set_defaults(func=cmd_explorer)
+
+    p_mcp = sub.add_parser(
+        "mcp",
+        help="Serve RAC repository knowledge to agents over MCP (stdio).",
+        parents=[version_parent],
+    )
+    p_mcp.add_argument(
+        "--root",
+        default=".",
+        help="Repository root to serve (default: current directory).",
+    )
+    p_mcp.set_defaults(func=cmd_mcp)
 
     p_new = sub.add_parser(
         "new",

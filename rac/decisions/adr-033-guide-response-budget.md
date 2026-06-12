@@ -47,6 +47,10 @@ Every Guide tool response is subject to a per-response character budget.
 - The marker field and truncation behaviour are part of the pinned tool
   output contract, covered by contract tests.
 
+The budget counts characters of the serialized JSON; the UTF-8 byte length on
+the wire may exceed it for non-ASCII content — accepted to keep the unit
+deterministic across models.
+
 ## Consequences
 
 ### Positive
