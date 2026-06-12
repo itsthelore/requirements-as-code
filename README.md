@@ -76,6 +76,42 @@ Lore puts that reasoning back in the repo as typed, connected artifacts, then se
 - **Teams who already write ADRs** and want those decisions to actually shape what the agent does.
 - **Anyone who wants the *why* behind their software versioned alongside the code.**
 
+## How this relates to spec-driven development
+
+Spec-driven development (SDD) tools — GitHub Spec Kit, OpenSpec, Kiro — manage the *change*: proposal, design, tasks, carried through to implementation. They treat requirements as ephemeral inputs that are consumed and archived. RAC manages the *requirements*: a durable, versioned, governed corpus that persists across changes and is served to your agent over MCP. RAC is the layer above SDD tools, not a competitor to them — an SDD tool drives each change, while Lore holds the decisions and requirements those changes draw on.
+
+| Dimension | Lore / RAC | GitHub Spec Kit | OpenSpec |
+| --- | --- | --- | --- |
+| Requirement persistence | Requirements, decisions, designs, and roadmaps are long-lived artifacts that persist across changes | Spec, plan, and tasks are created per feature under `specs/<feature>/` | Change folders are archived on completion under `openspec/changes/archive/`; the specs directory is updated |
+| Change management | None — RAC does not manage the change cycle; pair it with an SDD tool | Slash-command workflow: specify, clarify, plan, tasks, implement | Slash-command workflow: propose, apply, archive |
+| Traceability | Typed `Related` links between artifacts; `rac relationships --validate` checks them in CI | `/speckit.analyze` runs cross-artifact consistency and coverage analysis | `openspec validate` checks changes and specs for structural issues |
+| Tool coupling | Read-only MCP server; works with any MCP client | Slash commands or skills installed per agent at init (GitHub Copilot, Claude Code, Cursor, and others) | Slash commands for 20+ AI assistants |
+| Install footprint | `pip install requirements-as-code` (Python 3.11+) | `uv tool install specify-cli` from the Git repository (Python 3.11+) | `npm install -g @fission-ai/openspec` (Node.js 20.19+) |
+
+<!--
+Comparison sources, verified 2026-06-12:
+- GitHub Spec Kit — https://github.com/github/spec-kit (README): per-feature
+  artifacts specs/<feature>/spec.md, plan.md, tasks.md; workflow
+  /speckit.specify → /speckit.clarify → /speckit.plan → /speckit.tasks →
+  /speckit.implement; /speckit.analyze described as "cross-artifact
+  consistency & coverage analysis"; agents selected at init, Copilot
+  default, Claude Code/Cursor/Gemini CLI and others listed; install via
+  `uv tool install specify-cli --from git+https://github.com/github/spec-kit.git`,
+  Python 3.11+.
+- OpenSpec — https://github.com/Fission-AI/OpenSpec (README): workflow
+  /opsx:propose → /opsx:apply → /opsx:archive; archive output
+  "Archived to openspec/changes/archive/2025-01-23-add-dark-mode/ Specs
+  updated."; "works with 20+ AI assistants via slash commands"; install
+  `npm install -g @fission-ai/openspec`, Node.js 20.19.0+.
+  https://github.com/Fission-AI/OpenSpec/blob/main/docs/cli.md:
+  `openspec validate` checks changes and specs for structural issues.
+- Kiro is named in prose as part of the SDD category but excluded from
+  the table: its documentation site (https://kiro.dev/docs/specs/)
+  returned HTTP 403 to automated fetches at verification time, so its
+  cells could not be verified against the primary source.
+- Lore / RAC cells: this repository (README, docs/, rac/).
+-->
+
 ## Authoring artifacts (the RAC CLI)
 
 The MCP server is only as good as what it serves. RAC's CLI is how you write and maintain that knowledge — and how you enforce it in CI.

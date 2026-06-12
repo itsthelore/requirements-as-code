@@ -1,0 +1,3 @@
+Installed rac-review skill: .claude/skills/rac-review/SKILL.md
+
+Claude Code discovers skills automatically from .claude/skills/ in the project.

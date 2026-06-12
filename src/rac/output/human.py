@@ -14,6 +14,7 @@ from rac.core.artifacts import ARTIFACT_SPECS, spec_for
 from rac.core.classification import CONFIDENCE_THRESHOLD, TypeScore
 from rac.core.models import Diff, Issue, Product
 from rac.core.schema import SchemaReference
+from rac.core.skills import SkillSpec
 from rac.services.create import CreatedArtifact
 from rac.services.improve import ImprovementResult
 from rac.services.index import RepositoryIndex
@@ -41,6 +42,7 @@ from rac.services.review import (
     PRIORITY_UNKNOWN_ARTIFACT,
     ReviewReport,
 )
+from rac.services.skill import SkillInstallation
 from rac.services.stats import PortfolioStats
 from rac.services.validate import STATUS_INVALID, DirectoryValidation
 
@@ -857,6 +859,27 @@ def render_migrate_human(report: MigrationReport) -> str:
         f"{report.already_canonical} already canonical, "
         f"{report.skipped_unknown} skipped (unknown type).",
     ]
+    return "\n".join(lines)
+
+
+# --- skill (rac skill install / list, v0.10.5) -------------------------------
+
+
+def render_skill_install_human(installation: SkillInstallation) -> str:
+    """Human `rac skill install` output: what was installed and where."""
+    lines = [f"Installed {s.skill} skill: {s.path}" for s in installation.skills]
+    lines += [
+        "",
+        "Claude Code discovers skills automatically from .claude/skills/ in the project.",
+    ]
+    return "\n".join(lines)
+
+
+def render_skill_list_human(specs: list[SkillSpec]) -> str:
+    """Human `rac skill list` output: the bundled skill set."""
+    lines = [_bold("Bundled agent skills:"), ""]
+    name_w = max(len(spec.name) for spec in specs)
+    lines.extend(f"- {spec.name:<{name_w}}  {spec.description}" for spec in specs)
     return "\n".join(lines)
 
 
