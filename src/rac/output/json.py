@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from typing import TYPE_CHECKING
 
 from rac.core.models import Diff, Issue, Product
 from rac.core.schema import SchemaReference
@@ -27,6 +28,9 @@ from rac.services.review import ReviewReport
 from rac.services.skill import SkillInstallation
 from rac.services.stats import PortfolioStats
 from rac.services.validate import DirectoryValidation
+
+if TYPE_CHECKING:
+    from rac.mcp.telemetry import TelemetrySummary as MCPTelemetrySummary
 
 # --- validate ---------------------------------------------------------------
 
@@ -296,7 +300,7 @@ def render_migrate_json(report: MigrationReport) -> str:
     return json.dumps(report.to_dict(), indent=2)
 
 
-# --- skill (rac skill install / list, v0.10.4-v0.10.5) ------------------------
+# --- skill (rac skill install / list, v0.10.5) -------------------------------
 
 
 def render_skill_install_json(installation: SkillInstallation) -> str:
@@ -311,3 +315,15 @@ def render_skill_list_json(specs: list[SkillSpec]) -> str:
         "skills": [{"skill": spec.name, "description": spec.description} for spec in specs],
     }
     return json.dumps(payload, indent=2)
+
+
+# --- mcp-stats (v0.10.4) ----------------------------------------------------
+
+
+def render_mcp_stats_json(summary: MCPTelemetrySummary) -> str:
+    """JSON `rac mcp-stats` output (stable contract, ADR-007).
+
+    This payload is also the voluntary export: `--share` URL-encodes it
+    (minus the local log path) into a prefilled usage-report issue.
+    """
+    return json.dumps(summary.to_dict(), indent=2)

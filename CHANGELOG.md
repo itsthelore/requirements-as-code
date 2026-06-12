@@ -8,7 +8,7 @@ details, release history over commit history.
 
 ### Added
 
-- Bundled agent skills (v0.10.4, v0.10.5): the package now carries three
+- Bundled agent skills (v0.10.5): the package now carries three
   Claude Code skills as resources — `rac-artifacts` (author and maintain
   artifacts with the CLI), `rac-review` (work `rac review` findings
   worst-first until validation passes), and `rac-ingest` (convert DOCX,
@@ -30,6 +30,14 @@ details, release history over commit history.
   `docs/ecosystem.md` seed list, and a consolidated traceability gap
   report written from real authoring friction
   (`.agent-context/GAPS_TRACEABILITY.md`).
+
+- Opt-in Guide telemetry (v0.10.4): `rac mcp --telemetry` records tool-call
+  counts and metadata — never arguments or repository content — to a local
+  log under `$XDG_STATE_HOME/rac/`; off by default and announced on stderr
+  when on. Tool responses are byte-identical with telemetry on and off. A
+  new `rac mcp-stats` command summarizes the log (`--json` is the shareable
+  export; `--share` prints a prefilled GitHub usage-report issue URL you
+  review and submit yourself — RAC contains no network code).
 
 - Review impact and the first-run editor (v0.8.11): every `rac review`
   finding now carries an `impact` sentence — why it matters — owned by Core
