@@ -129,6 +129,47 @@ def test_search_artifacts_empty_result_is_not_an_error():
     assert "error" not in payload
 
 
+def test_search_artifacts_body_match_carries_snippet():
+    # `tightly` appears only in the requirement's body ("Services are tightly
+    # coupled"). The body tier (ADR-038) surfaces it with section + snippet, and
+    # the tool payload is byte-identical to the CLI's find JSON.
+    payload = call(CORPUS, "search_artifacts", {"query": "tightly"})
+    assert payload["match_count"] == 1
+    match = payload["matches"][0]
+    assert match["id"] == REQ
+    assert match["section"] == "Problem"
+    assert match["snippet"] == "Services are tightly coupled."
+    cli = json.loads(json_output.render_find_json(find_artifacts(CORPUS, "tightly")))
+    assert payload == cli
+
+
+def test_search_artifacts_metadata_match_omits_snippet_fields():
+    # A title match (no body hit) keeps the four-field metadata shape exactly
+    # (ADR-007): no section/snippet keys appear.
+    payload = call(CORPUS, "search_artifacts", {"query": "decoupled", "type": "requirement"})
+    assert [m["id"] for m in payload["matches"]] == [REQ]
+    assert list(payload["matches"][0]) == ["id", "type", "title", "path"]
+
+
+def test_search_snippet_match_truncates_as_whole_item():
+    # A snippet-bearing match truncates as one whole item under a small budget:
+    # the snippet rides inside its entry, so it is never split mid-element.
+    full = call(CORPUS, "search_artifacts", {"query": "services"})
+    assert full["match_count"] >= 2 and "truncated" not in full
+    budget = 220
+    payload = call(CORPUS, "search_artifacts", {"query": "services"}, budget=budget)
+    assert payload["truncated"] is True
+    assert payload["match_count"] == full["match_count"]
+    assert len(payload["matches"]) < full["match_count"]
+    # Every kept entry is structurally complete: either a metadata shape or a
+    # metadata-plus-snippet shape, never a fragment.
+    for m in payload["matches"]:
+        assert {"id", "type", "title", "path"} <= set(m)
+        assert set(m) <= {"id", "type", "title", "path", "section", "snippet"}
+        if "snippet" in m or "section" in m:
+            assert "section" in m and "snippet" in m
+
+
 # --- get_related -------------------------------------------------------------
 
 
