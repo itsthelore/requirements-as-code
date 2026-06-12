@@ -91,6 +91,8 @@ jobs:
             paths: "tests/test_resolve.py"
           - name: review
             paths: "tests/test_review.py"
+          - name: skill
+            paths: "tests/test_skill.py"
           - name: stats
             paths: "tests/test_stats.py"
           # Trust gates (v0.7.9): dogfood validates RAC's own rac/ corpus,
