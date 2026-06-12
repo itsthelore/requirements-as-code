@@ -207,6 +207,17 @@ from data, not exceptions. The shapes are the resolver's own (ADR-007):
 {"schema_version": "1", "error": "duplicate", "id": "REQ-004", "paths": ["a.md", "b.md"]}
 ```
 
+`get_artifact` adds one server-layer error of its own. When an artifact
+resolves but its file cannot be read — deleted between the walk and the read,
+permission-denied, or non-UTF-8 bytes — the server returns an `unreadable`
+result rather than letting the exception escape to the protocol. `id` is the
+resolved canonical identifier and `path` is the resolved path; the agent
+should retry (a later stateless re-read may succeed) or report the failure:
+
+```json
+{"schema_version": "1", "error": "unreadable", "id": "REQ-001", "path": "requirements/req-001.md"}
+```
+
 A not-found response from `get_artifact` or `get_related` should be followed
 by `search_artifacts` — the descriptions and the error message text may say
 so.

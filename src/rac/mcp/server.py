@@ -171,10 +171,17 @@ def build_server(root: str, budget: int = DEFAULT_BUDGET) -> FastMCP:
         result = _resolve(root, id)
         if result.outcome != OUTCOME_RESOLVED or result.artifact is None:
             return serialize(errors.from_resolution(result), budget)
+        try:
+            content = _read_content(result.artifact.path)
+        except (OSError, UnicodeDecodeError):
+            # The artifact resolved, but its file could not be read (deleted
+            # between walk and read, permissions, non-UTF-8). Return the failure
+            # as data, never a protocol exception (ADR-034).
+            return serialize(errors.unreadable(result.artifact.id, result.artifact.path), budget)
         payload = {
             "schema_version": "1",
             **result.artifact.to_dict(),
-            "content": _read_content(result.artifact.path),
+            "content": content,
         }
         return serialize(payload, budget)
 
