@@ -1,5 +1,7 @@
 # Requirements as Code
 
+![Lore — agents that know why. Deterministic. Read-only. No RAG, no guessing.](rac/assets/images/lore-header-dark.png)
+
 [![CI](https://github.com/tcballard/requirements-as-code/actions/workflows/ci.yml/badge.svg)](https://github.com/tcballard/requirements-as-code/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/requirements-as-code)](https://pypi.org/project/requirements-as-code/)
 
