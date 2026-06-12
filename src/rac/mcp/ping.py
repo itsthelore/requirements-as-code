@@ -136,13 +136,20 @@ def _iso(now: datetime) -> str:
 
 
 def build_payload(install_id: str, active_repos: int, now: datetime) -> dict:
-    """The entire transmission, pinned by ADR-041; additions are a new ADR."""
+    """The entire transmission, pinned by ADR-041; additions are a new ADR.
+
+    The shape follows PostHog's documented capture contract: ``distinct_id``
+    rides inside ``properties``, and ``$process_person_profile: false`` marks
+    the event anonymous so PostHog creates no person profile — cheaper, and
+    one more enforcement of the anonymity posture.
+    """
     return {
         "api_key": consent_record.POSTHOG_API_KEY,
         "event": PING_EVENT,
-        "distinct_id": install_id,
         "timestamp": _iso(now),
         "properties": {
+            "distinct_id": install_id,
+            "$process_person_profile": False,
             "schema_version": PING_SCHEMA_VERSION,
             "rac_version": __version__,
             "active_repos": active_repos,

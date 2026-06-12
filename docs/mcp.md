@@ -246,9 +246,10 @@ entire transmission — adding a field requires a new recorded decision
 {
   "api_key": "<public project write key>",
   "event": "lore-daily-ping",
-  "distinct_id": "<random install id>",
   "timestamp": "<ISO 8601 UTC>",
   "properties": {
+    "distinct_id": "<random install id>",
+    "$process_person_profile": false,
     "schema_version": "1",
     "rac_version": "<version>",
     "active_repos": 2
@@ -257,7 +258,9 @@ entire transmission — adding a field requires a new recorded decision
 ```
 
 What the fields are: the install id is a random token minted when you opt in
-(derived from nothing, so it identifies nothing); `active_repos` counts the
+(derived from nothing, so it identifies nothing); `$process_person_profile:
+false` tells PostHog to create no person profile, so the event stays
+anonymous on the receiving side as well; `active_repos` counts the
 distinct repositories Guide served in the last 30 days, tracked locally as
 salted digests in `~/.local/state/rac/active-repos.json` — the salt never
 leaves your machine and only the count is sent. The last-ping marker lives at

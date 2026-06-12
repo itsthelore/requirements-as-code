@@ -46,19 +46,21 @@ one anonymous daily ping to PostHog.
   interactive prompt: one honest question, never in CI, never twice.
 - The payload is pinned in full; adding a field is a new recorded
   decision: `api_key` (public project write key), `event`
-  (`lore-daily-ping`), `distinct_id` (install id), `timestamp`
-  (ISO 8601 UTC), `properties.schema_version` (`"1"`),
-  `properties.rac_version`, `properties.active_repos` (int). Never
-  repository contents, paths, artifact text, queries, tool arguments,
-  or anything identifying.
+  (`lore-daily-ping`), `timestamp` (ISO 8601 UTC), and `properties`
+  carrying `distinct_id` (install id), `$process_person_profile`
+  (`false` — PostHog creates no person profile, so the event stays
+  anonymous on the sink side too), `schema_version` (`"1"`),
+  `rac_version`, and `active_repos` (int). The shape follows PostHog's
+  documented capture contract. Never repository contents, paths,
+  artifact text, queries, tool arguments, or anything identifying.
 - The install id is random (`secrets.token_hex(16)`), minted at
   opt-in and preserved across off-and-on toggles — random beats a
   salted hash of machine attributes because it derives from nothing.
 - Active repos are counted locally: a salted digest of each served
   repository root, with a per-install salt that never leaves the
   machine, pruned to a thirty-day window. Only the count transmits.
-- The sink is PostHog Cloud via one plain stdlib HTTP POST — no SDK
-  dependency. RAC itself still hosts no infrastructure; the
+- The sink is PostHog Cloud (EU region) via one plain stdlib HTTP
+  POST — no SDK dependency. RAC itself still hosts no infrastructure; the
   third-party-processor trade-off is accepted and recorded here, and
   the sink is swappable behind one constant.
 - An empty `POSTHOG_API_KEY` constant is a kill switch: nothing sends

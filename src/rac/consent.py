@@ -32,12 +32,13 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-# The PostHog capture endpoint and public project write key (ADR-041). An
-# empty key is the kill switch: nothing sends even with consent recorded, and
-# `rac telemetry status` says so. Pre-release task: fill the key in when the
-# PostHog project exists; the sink is swappable behind these two constants.
-POSTHOG_ENDPOINT = "https://us.i.posthog.com/capture/"
-POSTHOG_API_KEY = ""
+# The PostHog capture endpoint (EU region) and public project write key
+# (ADR-041). The key is write-only by design and safe to embed; emptying it
+# is the kill switch — nothing sends even with consent recorded, and
+# `rac telemetry status` says so. The sink is swappable behind these two
+# constants.
+POSTHOG_ENDPOINT = "https://eu.i.posthog.com/capture/"
+POSTHOG_API_KEY = "phc_whK4Ndn7Pae3ZtgNRJWswiafYEyPc9d3eVoFihxzDysZ"
 
 CONSENT_FILENAME = "telemetry.json"
 

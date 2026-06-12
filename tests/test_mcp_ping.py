@@ -44,8 +44,14 @@ from rac.mcp.ping import (
 )
 
 # The pinned payload key sets (ADR-041). Adding a key is a recorded decision.
-PAYLOAD_KEYS = {"api_key", "event", "distinct_id", "timestamp", "properties"}
-PROPERTY_KEYS = {"schema_version", "rac_version", "active_repos"}
+PAYLOAD_KEYS = {"api_key", "event", "timestamp", "properties"}
+PROPERTY_KEYS = {
+    "distinct_id",
+    "$process_person_profile",
+    "schema_version",
+    "rac_version",
+    "active_repos",
+}
 
 NOW = datetime(2026, 6, 12, 12, 0, 0, tzinfo=UTC)
 
@@ -115,7 +121,13 @@ def test_cli_telemetry_on_records_consent_and_prints_install_id(capsys):
     assert record.share_usage is True
     assert record.install_id in out
     assert "Never paths, queries, or content" in out
-    assert "no PostHog key configured" in out  # empty-key build
+    assert "no PostHog key configured" not in out  # the key ships configured
+
+
+def test_cli_telemetry_on_names_the_kill_switch_when_key_is_empty(monkeypatch, capsys):
+    monkeypatch.setattr(consent, "POSTHOG_API_KEY", "")
+    assert main(["telemetry", "on"]) == 0
+    assert "no PostHog key configured" in capsys.readouterr().out
 
 
 def test_cli_telemetry_off_and_default_status(capsys):
@@ -126,7 +138,13 @@ def test_cli_telemetry_off_and_default_status(capsys):
     assert main(["telemetry"]) == 0  # default action is status
     out = capsys.readouterr().out
     assert "Sharing: off" in out
-    assert "not configured" in out
+    assert "not configured" not in out  # the key ships configured
+
+
+def test_cli_telemetry_status_names_the_kill_switch_when_key_is_empty(monkeypatch, capsys):
+    monkeypatch.setattr(consent, "POSTHOG_API_KEY", "")
+    assert main(["telemetry"]) == 0
+    assert "not configured" in capsys.readouterr().out
 
 
 def test_cli_telemetry_invalid_action_is_a_usage_error():
@@ -143,8 +161,10 @@ def test_payload_pinned_key_for_key():
     assert set(payload) == PAYLOAD_KEYS
     assert set(payload["properties"]) == PROPERTY_KEYS
     assert payload["event"] == PING_EVENT
-    assert payload["distinct_id"] == "c" * 32
     assert payload["timestamp"] == "2026-06-12T12:00:00Z"
+    assert payload["properties"]["distinct_id"] == "c" * 32
+    # Anonymous events: PostHog must create no person profile (ADR-041).
+    assert payload["properties"]["$process_person_profile"] is False
     assert payload["properties"]["schema_version"] == "1"
     assert payload["properties"]["rac_version"] == __version__
     assert payload["properties"]["active_repos"] == 2
@@ -238,7 +258,7 @@ def test_no_thread_without_consent_or_install_id_or_key(monkeypatch):
     assert start_ping_thread(Consent()) is None
     assert start_ping_thread(Consent(share_usage=True)) is None  # no install id
     record = consented()
-    assert consent.POSTHOG_API_KEY == ""
+    monkeypatch.setattr(consent, "POSTHOG_API_KEY", "")
     assert start_ping_thread(record) is None  # empty-key kill switch
 
 
@@ -308,7 +328,8 @@ def test_sharing_on_with_key_announces_and_records_the_repo(monkeypatch, tmp_pat
     )
 
 
-def test_sharing_on_without_key_says_nothing_will_be_sent(capsys):
+def test_sharing_on_without_key_says_nothing_will_be_sent(monkeypatch, capsys):
+    monkeypatch.setattr(consent, "POSTHOG_API_KEY", "")
     consented()
     server._maybe_start_sharing(".")
     captured = capsys.readouterr()
