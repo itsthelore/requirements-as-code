@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import {
   CheckItem,
   CommandPalette,
@@ -6,10 +7,72 @@ import {
   TerminalFrame,
 } from '../components';
 import type { CommandPaletteItem } from '../components';
-import lanternUrl from '../../design/lantern.png';
-import { BetaSignup } from './BetaSignup';
+import lamplighterUrl from '../../design/lamplighter.png';
+import demoUrl from './assets/demo.svg';
 import { CopyCommand } from './CopyCommand';
 import './landing.css';
+
+const REPO_URL = 'https://github.com/tcballard/requirements-as-code';
+
+const DEMO_ALT =
+  'Recorded terminal session: pip install requirements-as-code, ' +
+  'claude mcp add lore -- rac mcp, then rac find, rac resolve and ' +
+  "rac validate run against this repository's corpus, ending in PASS";
+
+/**
+ * The animated demo recording. The SVG animates continuously, which is
+ * heavy enough on the main thread to wreck LCP if it renders during
+ * page load — so the img mounts only once the section nears the
+ * viewport. The frame reserves the SVG's aspect ratio (no layout
+ * shift), and a noscript fallback keeps the recording reachable
+ * without JavaScript.
+ */
+function DemoRecording() {
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || !('IntersectionObserver' in window)) {
+      setShow(true);
+      return;
+    }
+    // A threshold rather than a margin: on small viewports a sliver of
+    // the frame peeks above the fold at load, and mounting then would
+    // put the animation's main-thread cost inside the LCP window.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShow(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15 },
+    );
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={frameRef} className="demo__frame">
+      {show ? (
+        <img
+          className="demo__recording"
+          src={demoUrl}
+          width={840}
+          height={581}
+          alt={DEMO_ALT}
+        />
+      ) : (
+        <noscript
+          dangerouslySetInnerHTML={{
+            __html: `<img class="demo__recording" src="${demoUrl}" width="840" height="581" alt="${DEMO_ALT}">`,
+          }}
+        />
+      )}
+    </div>
+  );
+}
 
 /** Scroll a page section into view and move focus to it. */
 function goToSection(id: string) {
@@ -23,7 +86,7 @@ function goToSection(id: string) {
 // real target — a section on this page or a page that exists.
 const paletteItems: CommandPaletteItem[] = [
   {
-    label: '90-second demo',
+    label: 'Demo',
     hint: 'section',
     action: () => goToSection('demo'),
   },
@@ -33,14 +96,21 @@ const paletteItems: CommandPaletteItem[] = [
     action: () => goToSection('tools'),
   },
   {
-    label: 'Closed beta',
+    label: 'Get Lore',
     hint: 'section',
-    action: () => goToSection('beta'),
+    action: () => goToSection('get'),
   },
   {
     label: 'Why agents do better with Lore',
     hint: 'section',
     action: () => goToSection('why'),
+  },
+  {
+    label: 'GitHub repository',
+    hint: 'link',
+    action: () => {
+      window.location.href = REPO_URL;
+    },
   },
   {
     label: 'Design system demo',
@@ -62,16 +132,16 @@ export function LandingApp() {
   return (
     <>
       <div className="landing">
-        <TerminalFrame title="Lore — CLOSED BETA">
+        <TerminalFrame title="Lore — open source">
           <div className="landing__grid">
             <main className="landing__main">
               <header className="hero">
                 <img
-                  className="pixel-art hero__lantern"
-                  src={lanternUrl}
-                  width={16}
-                  height={24}
-                  alt="Pixel-art lantern — placeholder for the Lore lamplighter mascot"
+                  className="hero__mascot"
+                  src={lamplighterUrl}
+                  width={500}
+                  height={395}
+                  alt="Lore's lamplighter mascot holding a lantern"
                 />
                 <div className="hero__copy">
                   <h1 className="hero__title">
@@ -113,13 +183,13 @@ export function LandingApp() {
                 </h2>
                 <div className="next__list">
                   <Prompt variant="next" index={1}>
-                    <a href="#demo">Run the 90-second demo.</a>
+                    <a href="#demo">Watch the demo.</a>
                   </Prompt>
                   <Prompt variant="next" index={2}>
                     <a href="#tools">See the four MCP tools.</a>
                   </Prompt>
                   <Prompt variant="next" index={3}>
-                    <a href="#beta">Join the closed beta.</a>
+                    <a href="#get">Get Lore.</a>
                   </Prompt>
                 </div>
               </section>
@@ -131,17 +201,44 @@ export function LandingApp() {
                 aria-labelledby="demo-heading"
               >
                 <h2 id="demo-heading" className="landing__h2">
-                  90-second demo
+                  Demo — zero to a validated corpus
                 </h2>
-                <TerminalFrame title="lore — demo session" className="demo-slot">
-                  <p className="demo-slot__text">
-                    90-second demo — recording pending. This slot will hold
-                    a real captured session; nothing simulated.
-                  </p>
-                </TerminalFrame>
+                <DemoRecording />
+                <p className="demo__caption">
+                  Real session recorded against this repository's own corpus
+                  — every command shown actually ran. Reproducible via
+                  scripts/record-demo.sh.
+                </p>
               </section>
 
-              <BetaSignup />
+              <section
+                id="get"
+                className="landing__section"
+                tabIndex={-1}
+                aria-labelledby="get-heading"
+              >
+                <h2 id="get-heading" className="landing__h2">
+                  Get Lore
+                </h2>
+                <div className="get__steps">
+                  <p className="get__step">
+                    <span className="get__lead">Install:</span>{' '}
+                    <CopyCommand command="pip install requirements-as-code" />
+                  </p>
+                  <p className="get__step">
+                    <span className="get__lead">
+                      Connect your agent (Claude Code, from your repo root):
+                    </span>{' '}
+                    <CopyCommand command="claude mcp add lore -- rac mcp" />
+                  </p>
+                </div>
+                <p className="get__note">
+                  Lore is built on RAC — Requirements as Code — the
+                  open-source engine underneath; for now the package, CLI
+                  and MCP server ship under the rac name. Source:{' '}
+                  <a href={REPO_URL}>github.com/tcballard/requirements-as-code</a>
+                </p>
+              </section>
             </main>
 
             <aside className="landing__rail" aria-label="Lore at a glance">
@@ -149,8 +246,8 @@ export function LandingApp() {
                 See the same prompt run twice — with and without the lore
               </h2>
               <p className="rail__note">
-                Recording pending — the comparison will land in the demo
-                slot.
+                Comparison recording pending — see the{' '}
+                <a href="#demo">toolchain demo</a> for now.
               </p>
 
               <section
@@ -173,7 +270,7 @@ export function LandingApp() {
                 </div>
                 <h3 className="rail__label">and in CI:</h3>
                 <Prompt
-                  command="lore validate"
+                  command="rac validate"
                   description="gate the graph on every push"
                 />
               </section>
@@ -193,7 +290,7 @@ export function LandingApp() {
                   </CheckItem>
                   <CheckItem>
                     One command:{' '}
-                    <CopyCommand command="claude mcp add lore -- lore mcp" />
+                    <CopyCommand command="claude mcp add lore -- rac mcp" />
                   </CheckItem>
                 </Panel>
               </section>

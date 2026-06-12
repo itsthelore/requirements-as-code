@@ -57,10 +57,12 @@
   align-items: flex-start;
 }
 
-.hero__lantern {
-  /* 16x24 placeholder at 6x — integer scale only */
-  width: 96px;
-  height: 144px;
+.hero__mascot {
+  /* high-resolution art shipped at 2x density (500x395 -> 250px wide);
+   * not pixel-grid, so no .pixel-art treatment */
+  width: 250px;
+  height: auto;
+  max-width: 100%;
   flex: none;
 }
 
@@ -105,24 +107,49 @@
   margin-top: var(--space-3);
 }
 
-/* ---- demo placeholder slot ---------------------------------------------- */
+/* ---- demo recording ------------------------------------------------------ */
 
-/* the empty TerminalFrame slot that will hold the real recording */
-.demo-slot .lore-terminal__body {
-  padding: var(--space-7) var(--space-5);
-  text-align: center;
+/* animated SVG of a real recorded session; it carries its own window
+ * chrome, so no TerminalFrame wrapper. The frame holds the SVG's
+ * aspect ratio so the deferred img mounts without layout shift. */
+.demo__frame {
+  width: 100%;
+  aspect-ratio: 840 / 581;
 }
 
-.demo-slot__text {
+.demo__recording {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+}
+
+.demo__caption {
   color: var(--text-muted);
-  max-width: 44ch;
-  margin: 0 auto;
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-3);
+  max-width: 60ch;
 }
 
-/* ---- beta signup -------------------------------------------------------- */
+/* ---- get lore ------------------------------------------------------------ */
 
-.beta__copy {
+.get__steps > * + * {
+  margin-top: var(--space-3);
+}
+
+.get__step {
   color: var(--text);
+}
+
+.get__lead {
+  color: var(--text-muted);
+}
+
+.get__note {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-4);
+  max-width: 62ch;
 }
 
 /* ---- right rail ---------------------------------------------------------- */
@@ -202,10 +229,8 @@
     gap: var(--space-5);
   }
 
-  .hero__lantern {
-    /* 4x — still an integer scale */
-    width: 64px;
-    height: 96px;
+  .hero__mascot {
+    width: 200px;
   }
 
   .hero__title {
