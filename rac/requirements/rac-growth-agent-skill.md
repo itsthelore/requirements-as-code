@@ -30,6 +30,12 @@ code.claude.com/docs/en/skills). RAC should ship one.
 
 - [REQ-004] The skill describes only released CLI behaviour; it contains no instructions that depend on unreleased commands, flags, or RAC core changes.
 
+- [REQ-005] The skill content ships with the distribution as a package resource (under `rac.skills`), loadable from an installed wheel without this repository, network access, or AI involvement.
+
+- [REQ-006] `rac skill install [--dir PATH]` writes the bundled skill to `.claude/skills/rac-artifacts/SKILL.md` in the target project, creating parent directories and never overwriting an existing file, with human and `--json` output and exit codes following the established CLI convention.
+
+- [REQ-007] The repository's dogfood copy at `.claude/skills/rac-artifacts/SKILL.md` and the packaged resource are byte-identical, enforced by a test.
+
 ## Success Metrics
 
 - The skill file exists at the documented path and is valid per the
@@ -62,6 +68,7 @@ code.claude.com/docs/en/skills). RAC should ship one.
 ## Related Roadmaps
 
 - v1.4-claude-skills
+- v0.10.4-bundled-agent-skill
 
 ## Related Requirements
 
