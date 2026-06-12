@@ -1,0 +1,146 @@
+{
+  "schema_version": "1",
+  "directory": "tests/fixtures/watchkeeper/head",
+  "base": "tests/fixtures/watchkeeper/base",
+  "head": "tests/fixtures/watchkeeper/head",
+  "changes": [
+    {
+      "change": "added",
+      "type": "requirement",
+      "id": "billing",
+      "title": "Billing Reports",
+      "path": "requirements/billing.md",
+      "base_status": null,
+      "head_status": "valid"
+    },
+    {
+      "change": "modified",
+      "type": "requirement",
+      "id": "checkout",
+      "title": "Checkout",
+      "path": "requirements/checkout.md",
+      "base_status": "valid",
+      "head_status": "valid",
+      "diff": {
+        "added_requirements": [],
+        "removed_requirements": [],
+        "modified_requirements": [
+          {
+            "id": "REQ-001",
+            "old_text": "Payment confirmation must complete within 2 seconds",
+            "new_text": "Payment confirmation should complete quickly"
+          }
+        ],
+        "added_metrics": [],
+        "removed_metrics": [],
+        "added_risks": [],
+        "removed_risks": []
+      }
+    },
+    {
+      "change": "modified",
+      "type": "requirement",
+      "id": "payouts",
+      "title": "Payouts",
+      "path": "requirements/payouts.md",
+      "base_status": "valid",
+      "head_status": "invalid",
+      "diff": {
+        "added_requirements": [],
+        "removed_requirements": [],
+        "modified_requirements": [
+          {
+            "id": "REQ-001",
+            "old_text": "Seller payouts must settle within 3 business days",
+            "new_text": "Seller can see a pending payout balance"
+          }
+        ],
+        "added_metrics": [],
+        "removed_metrics": [],
+        "added_risks": [],
+        "removed_risks": []
+      }
+    },
+    {
+      "change": "removed",
+      "type": "requirement",
+      "id": "legacy-upload",
+      "title": "Legacy Upload",
+      "path": "requirements/legacy-upload.md",
+      "base_status": "valid",
+      "head_status": null
+    }
+  ],
+  "validation": {
+    "base": {
+      "valid": 5,
+      "invalid": 0
+    },
+    "head": {
+      "valid": 4,
+      "invalid": 1
+    },
+    "newly_invalid": [
+      "requirements/payouts.md"
+    ],
+    "newly_valid": []
+  },
+  "relationships": {
+    "base": {
+      "total": 3,
+      "valid": 3,
+      "broken": 0,
+      "orphaned": 2,
+      "coverage": 0.4
+    },
+    "head": {
+      "total": 3,
+      "valid": 2,
+      "broken": 1,
+      "orphaned": 3,
+      "coverage": 0.4
+    },
+    "new_issues": [
+      {
+        "code": "relationship-target-not-found",
+        "relationship": "related_requirements",
+        "target": "legacy-upload",
+        "path": "decisions/adr-001-payment-provider.md",
+        "identifier": null
+      }
+    ],
+    "resolved_issues": []
+  },
+  "stats": {
+    "total": {
+      "base": 5,
+      "head": 5
+    },
+    "by_type": {
+      "requirement": {
+        "base": 3,
+        "head": 3
+      },
+      "decision": {
+        "base": 1,
+        "head": 1
+      },
+      "roadmap": {
+        "base": 1,
+        "head": 1
+      },
+      "prompt": {
+        "base": 0,
+        "head": 0
+      },
+      "design": {
+        "base": 0,
+        "head": 0
+      },
+      "unknown": {
+        "base": 0,
+        "head": 0
+      }
+    }
+  }
+}

@@ -1,0 +1,40 @@
+RAC Watchkeeper
+===============
+
+Directory:  tests/fixtures/watchkeeper/head
+Comparing:  tests/fixtures/watchkeeper/base → tests/fixtures/watchkeeper/head
+
+Changed Artifacts
+-----------------
+
+  + requirements/billing.md  (requirement)
+  ~ requirements/checkout.md  (requirement)
+  ~ requirements/payouts.md  (requirement)
+  - requirements/legacy-upload.md  (requirement)
+
+Validation
+----------
+
+  Valid:    5 → 4
+  Invalid:  0 → 1
+
+  Newly invalid:
+    ✗ requirements/payouts.md
+
+Relationships
+-------------
+
+  Total:    3 → 3
+  Valid:    3 → 2
+  Broken:   0 → 1
+
+  New issues:
+    ! decisions/adr-001-payment-provider.md — Related Requirements reference 'legacy-upload' (relationship-target-not-found)
+
+Repository Changes
+------------------
+
+  Requirement    3 → 3
+  Decision       1 → 1
+  Roadmap        1 → 1
+  Total          5 → 5
