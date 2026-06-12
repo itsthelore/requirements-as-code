@@ -40,6 +40,7 @@ from rac.services.review import (
     PRIORITY_UNKNOWN_ARTIFACT,
     ReviewReport,
 )
+from rac.services.skill import InstalledSkill
 from rac.services.stats import PortfolioStats
 from rac.services.validate import STATUS_INVALID, DirectoryValidation
 
@@ -854,3 +855,15 @@ def render_migrate_human(report: MigrationReport) -> str:
         f"{report.skipped_unknown} skipped (unknown type).",
     ]
     return "\n".join(lines)
+
+
+# --- skill (rac skill install, v0.10.4) ---------------------------------------
+
+
+def render_skill_install_human(installed: InstalledSkill) -> str:
+    """Human `rac skill install` output: what was installed and where."""
+    return (
+        f"Installed {installed.skill} skill: {installed.path}\n"
+        f"\n"
+        f"Claude Code discovers it automatically from .claude/skills/ in the project."
+    )

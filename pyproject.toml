@@ -81,6 +81,10 @@ where = ["src"]
 # The Explorer stylesheet ships with the distribution (v0.8.7): the app loads
 # it via CSS_PATH, resolved relative to the installed package.
 "rac.explorer" = ["*.tcss"]
+# The bundled Claude Code agent skill ships with the distribution (v0.10.4):
+# `rac skill install` loads it via importlib.resources, never from the
+# repository. A test pins it byte-for-byte to the dogfood copy (REQ-007).
+"rac.skills" = ["*/SKILL.md"]
 
 [tool.setuptools_scm]
 # Defaults are fine: version comes from the latest `vX.Y.Z` git tag.

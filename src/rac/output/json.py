@@ -23,6 +23,7 @@ from rac.services.portfolio import PortfolioSummary
 from rac.services.relationships import RelationshipReport, RelationshipValidation
 from rac.services.resolve import ResolutionResult, SearchResult
 from rac.services.review import ReviewReport
+from rac.services.skill import InstalledSkill
 from rac.services.stats import PortfolioStats
 from rac.services.validate import DirectoryValidation
 
@@ -292,3 +293,11 @@ def render_find_json(result: SearchResult) -> str:
 def render_migrate_json(report: MigrationReport) -> str:
     """JSON `rac migrate metadata` output (stable contract, ADR-007)."""
     return json.dumps(report.to_dict(), indent=2)
+
+
+# --- skill (rac skill install, v0.10.4) ---------------------------------------
+
+
+def render_skill_install_json(installed: InstalledSkill) -> str:
+    """JSON `rac skill install` output (stable contract, ADR-007)."""
+    return json.dumps(installed.to_dict(), indent=2)

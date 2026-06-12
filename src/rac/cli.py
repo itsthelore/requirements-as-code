@@ -20,6 +20,7 @@ Commands:
     rac resolve <ID> [directory] [--json]
     rac find <query> [directory] [--type TYPE] [--json]
     rac migrate metadata <directory> [--dry-run] [--json]
+    rac skill install [--dir PATH] [--json]
 
 Exit codes:
     0  success (incl. inspect/improve reporting Unknown; relationships found or
@@ -27,7 +28,7 @@ Exit codes:
        index produced; artifact created; templates listed; find with or without
        matches; migration or dry run completed, even with nothing to migrate;
        explorer session quit by the user; mcp server shutdown on client
-       disconnect)
+       disconnect; skill installed)
     1  validate: errors found; stats: no valid known artifacts; ingest:
        conversion failed; relationships --validate: broken/ambiguous/self
        references or duplicate identifiers found; review: invalid artifacts
@@ -35,11 +36,13 @@ Exit codes:
        template missing (broken installation) or malformed repository config;
        init: established key conflicts with the requested one; resolve:
        artifact not found or duplicate ID; migrate: malformed repository
-       config or ID generation exhausted
+       config or ID generation exhausted; skill install: target file already
+       exists (never overwritten) or packaged skill missing (broken
+       installation)
     2  usage / IO error (file not found, not a directory, unsupported type,
        refuse-to-overwrite, missing output directory, repository not
        initialized, invalid repository key, explorer extra not installed,
-       mcp --root not a directory)
+       mcp --root not a directory, skill --dir not a directory)
 """
 
 from __future__ import annotations
@@ -53,6 +56,7 @@ from rac.core.classification import score_artifacts
 from rac.core.markdown import parse, parse_file
 from rac.core.models import Product
 from rac.core.schema import available_schemas, schema_reference
+from rac.core.skills import SkillResourceMissing
 from rac.core.templates import (
     TemplateNotFound,
     TemplateResourceMissing,
@@ -93,6 +97,7 @@ from rac.services.resolve import (
     resolve_artifact,
 )
 from rac.services.review import build_review
+from rac.services.skill import SkillFileExists, install_skill
 from rac.services.stats import collect_stats
 from rac.services.validate import validate_directory
 
@@ -537,6 +542,25 @@ def cmd_init(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_skill(args: argparse.Namespace) -> int:
+    if not Path(args.dir).is_dir():
+        print(f"rac: not a directory: {args.dir}", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE)
+    try:
+        installed = install_skill(args.dir)
+    except SkillFileExists as exc:  # refused; the existing file is untouched
+        print(f"rac: {exc}", file=sys.stderr)
+        return EXIT_VALIDATION_FAILED
+    except SkillResourceMissing as exc:  # broken installation
+        print(f"rac: {exc}", file=sys.stderr)
+        return EXIT_VALIDATION_FAILED
+    if args.json:
+        print(outputs.render_skill_install_json(installed))
+    else:
+        print(outputs.render_skill_install_human(installed))
+    return EXIT_OK
+
+
 def cmd_templates(args: argparse.Namespace) -> int:
     names = available_templates()
     if args.json:
@@ -975,6 +999,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Recurse into subdirectories (the default; accepted for clarity).",
     )
     p_migrate.set_defaults(func=cmd_migrate)
+
+    p_skill = sub.add_parser(
+        "skill",
+        help="Install the bundled Claude Code agent skill into a project.",
+        parents=[version_parent],
+    )
+    p_skill.add_argument(
+        "action",
+        choices=["install"],
+        help="What to do (this release: install).",
+    )
+    p_skill.add_argument(
+        "--dir",
+        default=".",
+        help="Target project directory (default: current directory).",
+    )
+    p_skill.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of human-readable text."
+    )
+    p_skill.set_defaults(func=cmd_skill)
 
     return parser
 
