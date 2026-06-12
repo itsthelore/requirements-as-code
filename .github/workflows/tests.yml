@@ -79,6 +79,8 @@ jobs:
             paths: "tests/test_init.py"
           - name: inspect
             paths: "tests/test_inspect.py"
+          - name: intent
+            paths: "tests/test_intent.py"
           - name: migrate
             paths: "tests/test_migrate.py"
           - name: portfolio
