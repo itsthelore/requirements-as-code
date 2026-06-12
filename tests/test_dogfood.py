@@ -106,6 +106,23 @@ def test_demo_keywords_surface_the_decision():
         assert DEMO_DECISION_ID in ids, f"{query!r} did not surface {DEMO_DECISION_ID}: {ids}"
 
 
+def test_lore_does_not_match_explorer_artifacts():
+    """Named regression (ADR-037): `lore` is a substring of "Explorer" but not a
+    token prefix of it. On the dogfood corpus — which carries both Lore and many
+    Explorer artifacts — `rac find lore` must return only Lore-related artifacts
+    and never an Explorer one."""
+    result = find_artifacts(CORPUS, "lore")
+    assert result.match_count > 0  # the Lore product-identity artifacts exist
+    leaked = [m.path for m in result.matches if "explorer" in m.path.casefold()]
+    assert leaked == [], f"`lore` leaked Explorer artifacts: {leaked}"
+    # Every match is genuinely Lore-related: the token appears in its content.
+    for m in result.matches:
+        text = Path(m.path).read_text(encoding="utf-8").casefold()
+        from rac.services.resolve import tokenize
+
+        assert "lore" in tokenize(text), f"{m.path} matched 'lore' without a lore token"
+
+
 def test_demo_decision_resolves_with_content():
     """get_artifact's resolver finds the decision and its content carries the
     hard-DELETE prohibition the grounded agent must cite."""

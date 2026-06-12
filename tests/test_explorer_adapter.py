@@ -236,7 +236,11 @@ def test_search_rows_rank_like_rac_find():
 def test_search_rows_trailing_type_token_filters():
     adapter = ExplorerAdapter(str(FIXTURES / "all_types"))
     adapter.load()
-    filtered = adapter.search_rows(". decision")
+    # "all" is a token of every artifact's path (the all_types fixture dir); the
+    # trailing "decision" filters to the one decision. Token-boundary matching
+    # (ADR-037) replaced substring matching, so a punctuation-only query no
+    # longer means "match everything" — the query must carry a real token.
+    filtered = adapter.search_rows("all decision")
     assert filtered.rows
     assert all(row.type == "decision" for row in filtered.rows)
 
