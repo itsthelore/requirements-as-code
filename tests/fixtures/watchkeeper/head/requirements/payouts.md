@@ -7,7 +7,7 @@ Sellers wait too long for settled funds.
 ## Requirements
 
 [REQ-001] Seller payouts must settle within 3 business days
-[REQ-001] Seller can see a pending payout balance
+[REQ-001] Seller payouts must show a pending balance within 1 day
 
 ## Success Metrics
 

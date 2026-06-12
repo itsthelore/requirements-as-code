@@ -52,7 +52,7 @@
           {
             "id": "REQ-001",
             "old_text": "Seller payouts must settle within 3 business days",
-            "new_text": "Seller can see a pending payout balance"
+            "new_text": "Seller payouts must show a pending balance within 1 day"
           }
         ],
         "added_metrics": [],
@@ -142,5 +142,86 @@
         "head": 0
       }
     }
-  }
+  },
+  "findings": [
+    {
+      "code": "acceptance_criteria_removed",
+      "severity": "warning",
+      "path": "requirements/checkout.md",
+      "identifier": "checkout",
+      "detail": "Acceptance criteria section removed.",
+      "evidence": []
+    },
+    {
+      "code": "ambiguity_introduced",
+      "severity": "warning",
+      "path": "requirements/checkout.md",
+      "identifier": "checkout",
+      "detail": "Ambiguous wording introduced in REQ-001: 'quickly'.",
+      "evidence": [
+        "- Payment confirmation must complete within 2 seconds",
+        "+ Payment confirmation should complete quickly"
+      ]
+    },
+    {
+      "code": "constraint_removed",
+      "severity": "warning",
+      "path": "requirements/legacy-upload.md",
+      "identifier": "legacy-upload",
+      "detail": "Requirement REQ-001 with mandatory wording removed.",
+      "evidence": [
+        "- Upload must complete within 5 seconds"
+      ]
+    },
+    {
+      "code": "constraint_weakened",
+      "severity": "warning",
+      "path": "requirements/checkout.md",
+      "identifier": "checkout",
+      "detail": "Mandatory requirement REQ-001 weakened to hedged wording.",
+      "evidence": [
+        "- Payment confirmation must complete within 2 seconds",
+        "+ Payment confirmation should complete quickly"
+      ]
+    },
+    {
+      "code": "specificity_regression",
+      "severity": "warning",
+      "path": "requirements/checkout.md",
+      "identifier": "checkout",
+      "detail": "Measurable requirement REQ-001 became vague.",
+      "evidence": [
+        "- Payment confirmation must complete within 2 seconds",
+        "+ Payment confirmation should complete quickly"
+      ]
+    },
+    {
+      "code": "unlinked_scope",
+      "severity": "warning",
+      "path": "requirements/billing.md",
+      "identifier": "billing",
+      "detail": "New artifact declares no relationships and nothing references it.",
+      "evidence": []
+    },
+    {
+      "code": "relationship_impact",
+      "severity": "info",
+      "path": "requirements/checkout.md",
+      "identifier": "checkout",
+      "detail": "Modified artifact is referenced by 1 artifact(s).",
+      "evidence": [
+        "adr-001"
+      ]
+    },
+    {
+      "code": "relationship_impact",
+      "severity": "info",
+      "path": "requirements/legacy-upload.md",
+      "identifier": "legacy-upload",
+      "detail": "Removed artifact is referenced by 1 artifact(s).",
+      "evidence": [
+        "adr-001"
+      ]
+    }
+  ]
 }
