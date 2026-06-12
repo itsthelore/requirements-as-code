@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import type { RefObject } from 'react';
 import { KeyboardHint } from '../components';
 import type { CorpusIndex } from './data';
+import { displayName } from './data';
 import type { Artifact } from './types';
 import { ArtifactChips } from './chips';
 
@@ -39,7 +40,7 @@ const Row = memo(function Row({ artifact }: { artifact: Artifact }) {
         className="viewer-row"
         href={`#/artifact/${encodeURIComponent(artifact.id)}`}
       >
-        <span className="viewer-row__id">{artifact.id}</span>
+        <span className="viewer-row__id">{displayName(artifact)}</span>
         <span className="viewer-row__title">{artifact.title}</span>
         <ArtifactChips artifact={artifact} />
       </a>
@@ -88,11 +89,14 @@ export function ListView({ index, filters, onFilters, searchRef }: ListViewProps
   // change — not per keystroke and not per row render.
   const visible = useMemo(() => {
     const q = debouncedQuery.trim().toLowerCase();
+    // Statuses arrive in arbitrary case ("Accepted"); group them
+    // case-insensitively while displaying the authored casing.
+    const statusKey = filters.status.toLowerCase();
     const out: Artifact[] = [];
     for (const row of index.rows) {
       const a = row.artifact;
       if (filters.type && a.type !== filters.type) continue;
-      if (filters.status && a.status !== filters.status) continue;
+      if (statusKey && a.status.toLowerCase() !== statusKey) continue;
       if (q && !row.haystack.includes(q)) continue;
       out.push(a);
     }

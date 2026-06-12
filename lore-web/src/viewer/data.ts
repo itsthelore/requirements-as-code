@@ -25,10 +25,22 @@ export async function loadExport(): Promise<LoreExport> {
   return (await res.json()) as LoreExport;
 }
 
+/**
+ * Preferred human-facing name for an artifact: the first alias that
+ * differs from the opaque id, else the id itself. Deterministic —
+ * alias order is as emitted by Core.
+ */
+export function displayName(artifact: Artifact): string {
+  for (const alias of artifact.aliases ?? []) {
+    if (alias !== artifact.id) return alias;
+  }
+  return artifact.id;
+}
+
 /** One artifact plus everything precomputed for list/search/detail. */
 export interface IndexedArtifact {
   artifact: Artifact;
-  /** Lowercased id + title + body text, computed once for search. */
+  /** Lowercased id + aliases + title + body text, for search. */
   haystack: string;
 }
 
@@ -38,12 +50,14 @@ export interface CorpusIndex {
   byId: Map<string, Artifact>;
   /** Distinct artifact types, in first-seen order. */
   types: string[];
-  /** Distinct statuses, in first-seen order. */
+  /** Distinct statuses (first-seen casing), deduplicated
+   *  case-insensitively. */
   statuses: string[];
   outbound: Map<string, Relationship[]>;
   inbound: Map<string, Relationship[]>;
-  /** Set of all artifact IDs, for cited-ID linkification. */
-  idSet: Set<string>;
+  /** Lowercased id and alias tokens -> canonical artifact id, for
+   *  cited-token linkification. */
+  citationLookup: Map<string, string>;
 }
 
 const TAG_RE = /<[^>]*>/g;
@@ -51,18 +65,30 @@ const WS_RE = /\s+/g;
 
 export function buildIndex(data: LoreExport): CorpusIndex {
   const byId = new Map<string, Artifact>();
+  const citationLookup = new Map<string, string>();
   const types: string[] = [];
   const statuses: string[] = [];
+  const statusKeys = new Set<string>();
   const rows: IndexedArtifact[] = [];
 
   for (const artifact of data.artifacts) {
+    const aliases = artifact.aliases ?? [];
     byId.set(artifact.id, artifact);
+    citationLookup.set(artifact.id.toLowerCase(), artifact.id);
+    for (const alias of aliases) {
+      const key = alias.toLowerCase();
+      if (!citationLookup.has(key)) citationLookup.set(key, artifact.id);
+    }
     if (!types.includes(artifact.type)) types.push(artifact.type);
-    if (!statuses.includes(artifact.status)) statuses.push(artifact.status);
+    const statusKey = artifact.status.toLowerCase();
+    if (!statusKeys.has(statusKey)) {
+      statusKeys.add(statusKey);
+      statuses.push(artifact.status);
+    }
     const bodyText = artifact.body_html.replace(TAG_RE, ' ').replace(WS_RE, ' ');
     rows.push({
       artifact,
-      haystack: `${artifact.id} ${artifact.title} ${bodyText}`.toLowerCase(),
+      haystack: `${artifact.id} ${aliases.join(' ')} ${artifact.title} ${bodyText}`.toLowerCase(),
     });
   }
 
@@ -85,24 +111,31 @@ export function buildIndex(data: LoreExport): CorpusIndex {
     statuses,
     outbound,
     inbound,
-    idSet: new Set(byId.keys()),
+    citationLookup,
   };
 }
 
 /**
- * Replace occurrences of known artifact IDs inside the rendered body
- * with links to their detail view. Walks text nodes only; existing
- * anchors are left alone, and tokens that do not match a corpus ID are
- * untouched.
+ * Replace cited artifact tokens inside the rendered body with links to
+ * their detail view. A token is a maximal run of word characters and
+ * hyphens starting with a letter, bounded by non-word characters; it is
+ * linkified only when its lowercase form is a known id or alias in the
+ * corpus (so both "RAC-KTQ63DSC8SZW" and "ADR-027"/"adr-027" link, and
+ * nothing else does). Walks text nodes only; text inside <a>, <code>
+ * and <pre> is left alone.
  */
-const ID_TOKEN_RE = /\b[A-Z][A-Z0-9]{1,11}-\d{1,6}\b/g;
+const TOKEN_RE = /(?<![\w-])[A-Za-z][\w-]+(?![\w-])/g;
+const SKIP_TAGS = new Set(['A', 'CODE', 'PRE']);
 
-export function linkifyIds(root: HTMLElement, idSet: Set<string>): void {
+export function linkifyCitations(
+  root: HTMLElement,
+  lookup: Map<string, string>,
+): void {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       let el = node.parentElement;
       while (el && el !== root) {
-        if (el.tagName === 'A') return NodeFilter.FILTER_REJECT;
+        if (SKIP_TAGS.has(el.tagName)) return NodeFilter.FILTER_REJECT;
         el = el.parentElement;
       }
       return NodeFilter.FILTER_ACCEPT;
@@ -116,18 +149,19 @@ export function linkifyIds(root: HTMLElement, idSet: Set<string>): void {
 
   for (const textNode of textNodes) {
     const text = textNode.nodeValue ?? '';
-    ID_TOKEN_RE.lastIndex = 0;
+    TOKEN_RE.lastIndex = 0;
     let match: RegExpExecArray | null;
     let last = 0;
     let frag: DocumentFragment | null = null;
-    while ((match = ID_TOKEN_RE.exec(text)) !== null) {
-      if (!idSet.has(match[0])) continue;
+    while ((match = TOKEN_RE.exec(text)) !== null) {
+      const target = lookup.get(match[0].toLowerCase());
+      if (!target) continue;
       frag ??= document.createDocumentFragment();
       if (match.index > last) {
         frag.appendChild(document.createTextNode(text.slice(last, match.index)));
       }
       const a = document.createElement('a');
-      a.href = `#/artifact/${encodeURIComponent(match[0])}`;
+      a.href = `#/artifact/${encodeURIComponent(target)}`;
       a.textContent = match[0];
       frag.appendChild(a);
       last = match.index + match[0].length;

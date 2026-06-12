@@ -254,6 +254,14 @@
   margin: var(--space-1) 0 var(--space-3);
 }
 
+/* opaque id + source path provenance line */
+.viewer-detail__provenance {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
 .viewer-body {
   max-width: 64rem;
 }

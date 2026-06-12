@@ -4,6 +4,8 @@ import type { Artifact } from './types';
  * Small bordered chips for artifact type and status.
  * Colour is semantic only: accepted = green (pass), rejected = error,
  * superseded/deprecated = muted. Everything else is plain text.
+ * Statuses arrive in arbitrary case ("Accepted"); colour is keyed
+ * case-insensitively and the authored casing is displayed.
  */
 
 const STATUS_CLASS: Record<string, string> = {
@@ -18,7 +20,7 @@ export function TypeChip({ type }: { type: string }) {
 }
 
 export function StatusChip({ status }: { status: string }) {
-  const semantic = STATUS_CLASS[status] ?? '';
+  const semantic = STATUS_CLASS[status.toLowerCase()] ?? '';
   return (
     <span className={`viewer-chip${semantic ? ` ${semantic}` : ''}`}>
       {status}

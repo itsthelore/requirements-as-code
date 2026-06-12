@@ -1,83 +1,112 @@
 # Lore export viewer — input contract
 
-Status: **PROPOSAL**. This document defines the JSON payload the static
-export viewer (`lore export --html`) consumes, as implemented in
-`src/viewer/`. It is a proposal for the maintainer to reconcile with
-Lore Core's actual export format — it is **not** an instruction to
-modify Core. Where Core's real export differs, either Core's `--html`
-path maps its data into this shape, or this contract and the viewer are
-amended to match Core. Field-name casing (snake_case below) is the most
-likely point of reconciliation.
+Status: **Reconciled v1** — matches `rac export` as of roadmap v0.11.0.
+This document defines the JSON payload the static export viewer
+(`rac export --html`) consumes, as implemented in `src/viewer/`. The
+viewer consumes exactly what Core emits; any future shape change is a
+joint change to Core's export, this contract, and the viewer, with the
+vendored Portal shell rebuilt (`npm run vendor:shell`).
 
-## 1. Payload: `lore-export.json`
+## 1. Payload: the export document
 
-A single JSON document.
+A single JSON document, as emitted by `rac export --json`.
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": "1",
   "corpus": {
-    "name": "ledgerline",
-    "generated_at": "2026-06-12T00:00:00Z",
-    "lore_version": "0.10.3",
-    "sample": false
+    "name": "rac",
+    "rac_version": "0.11.0",
+    "artifact_count": 106
   },
   "artifacts": [
     {
-      "id": "ADR-021",
-      "type": "adr",
-      "status": "accepted",
-      "title": "Replace Celery with Dramatiq",
-      "body_html": "<p>This supersedes ADR-005. …</p>"
+      "id": "RAC-KTQ63DSC8SZW",
+      "aliases": ["adr-027", "adr-027-ci-test-topology"],
+      "type": "decision",
+      "status": "Accepted",
+      "title": "ADR-027: CI test topology",
+      "path": "rac/decisions/adr-027-ci-test-topology.md",
+      "body_html": "<p>…</p>"
     }
   ],
   "relationships": [
-    { "from": "ADR-021", "to": "ADR-005", "type": "supersedes" }
+    { "from": "RAC-KTQ63DSC8SZW", "to": "RAC-ABCDEF123456", "type": "relates-to" }
   ]
 }
 ```
 
 ### `schema_version`
 
-Integer, currently `1`. The viewer renders any payload it can parse and
-does not hard-fail on a different version, but a bump signals a breaking
-shape change.
+String, currently `"1"` (matching the index contract). The viewer
+renders any payload it can parse and does not hard-fail on a different
+version, but a bump signals a breaking shape change.
 
 ### `corpus` — minimal metadata
 
-| field          | type    | meaning                                            |
-| -------------- | ------- | -------------------------------------------------- |
-| `name`         | string  | Human-readable corpus name, e.g. the repo name.    |
-| `generated_at` | string  | ISO 8601 timestamp of export generation.           |
-| `lore_version` | string  | Version of the Lore CLI that produced the export.  |
-| `sample`       | boolean | Optional, default false. True marks demonstration data; the viewer then shows SAMPLE DATA labels in the header and footer. |
+| field            | type    | meaning                                          |
+| ---------------- | ------- | ------------------------------------------------ |
+| `name`           | string  | Human-readable corpus name — the exported directory name. |
+| `rac_version`    | string  | Version of the RAC CLI that produced the export. The header shows it when present and tolerates its absence. |
+| `artifact_count` | integer | Number of artifacts in the export.               |
+| `sample`         | boolean | Optional, default false. True marks demonstration data; the viewer then shows SAMPLE DATA labels in the header and footer. Never emitted by Core; used by the committed sample corpus. |
+
+The export is deterministic: there is no `generated_at` timestamp and
+no environment-dependent field. The viewer must not expect either.
 
 ### `artifacts[]`
 
-| field       | type   | meaning                                                  |
-| ----------- | ------ | -------------------------------------------------------- |
-| `id`        | string | Stable artifact ID, unique within the corpus (`ADR-021`). The viewer links occurrences of known IDs found in body text. |
-| `type`      | string | Artifact family (`adr`, `standard`, …). Open set; the viewer derives its type filter from the values present. |
-| `status`    | string | Lifecycle status (`accepted`, `proposed`, `superseded`, `deprecated`, `rejected`, …). Open set; the filter is derived from values present. Known statuses get semantic colour (accepted = green, rejected = error, superseded/deprecated = muted); unknown statuses render plain. |
-| `title`     | string | Plain text.                                              |
-| `body_html` | string | The artifact body **rendered to HTML at export time** (see trust model). |
+Ordered by `path`.
 
-### `relationships[]` — typed edges
+| field       | type     | meaning                                                |
+| ----------- | -------- | ------------------------------------------------------ |
+| `id`        | string   | Opaque stable artifact ID, unique within the corpus (`RAC-KTQ63DSC8SZW`). |
+| `aliases`   | string[] | Human aliases as emitted by Core identity, e.g. `["adr-027", "adr-027-ci-test-topology"]`. May be empty. |
+| `type`      | string   | Artifact family (`decision`, `requirement`, …). Open set; the viewer derives its type filter from the values present. |
+| `status`    | string   | Lifecycle status in its authored casing (`Accepted`, `Proposed`, `Superseded`, …). Open set — see case handling below. |
+| `title`     | string   | Plain text.                                            |
+| `path`      | string   | Source path within the repository. Shown as a muted provenance line on the detail view. |
+| `body_html` | string   | The artifact body **rendered to HTML at export time** (see trust model). |
 
-Each edge is `{ "from": ID, "to": ID, "type": string }` and reads
-"`from` `type` `to`" (e.g. `ADR-021 supersedes ADR-005`). Known types
-and their inverse labels in the viewer:
+#### Alias display
 
-| type         | outbound label | inbound label    |
-| ------------ | -------------- | ---------------- |
-| `supersedes` | supersedes →   | ← superseded by  |
-| `refines`    | refines →      | ← refined by     |
-| `implements` | implements →   | ← implemented by |
-| `relates-to` | relates to →   | ← related to     |
+The opaque `id` is stable but not human-friendly, so the viewer prefers
+a **display name**: deterministically, the first alias that differs
+from the `id`, else the `id` itself. The display name is used on list
+rows, the detail heading, and related-artifact links; the opaque `id`
+stays visible on the detail view's provenance line (alongside `path`)
+and remains the routing key (`#/artifact/<id>`).
 
-The set is open: unknown edge types render grouped under their literal
-type name in both directions. Edges pointing at IDs not present in the
-corpus render as "(not in corpus)" rather than being dropped.
+#### Status case handling
+
+Statuses arrive in arbitrary case. The viewer groups the status filter
+and applies semantic colouring **case-insensitively** (`Accepted` and
+`accepted` are one status) while displaying the first-seen authored
+casing. Known statuses get semantic colour (accepted = green,
+rejected = error, superseded/deprecated = muted); unknown statuses
+render plain.
+
+### `relationships[]` — edges
+
+Each edge is `{ "from": ID, "to": ID-or-alias, "type": string }` and
+reads "`from` `type` `to`". Ordered by (from, to). Core emits **only**
+`relates-to`; richer edge typing is a future Core decision. `to` may be
+an unresolved alias preserved verbatim — the viewer renders those as
+"(not in corpus)" rather than dropping them.
+
+The type set stays open for forward compatibility. The viewer keeps
+inverse labels for types a future Core might emit (accepted if they
+appear, **never emitted today**):
+
+| type         | outbound label | inbound label    | emitted by Core |
+| ------------ | -------------- | ---------------- | --------------- |
+| `relates-to` | relates to →   | ← related to     | yes             |
+| `supersedes` | supersedes →   | ← superseded by  | no — forward-compatible |
+| `refines`    | refines →      | ← refined by     | no — forward-compatible |
+| `implements` | implements →   | ← implemented by | no — forward-compatible |
+
+Unknown edge types render grouped under their literal type name in both
+directions.
 
 ## 2. Data injection — how the JSON reaches the viewer
 
@@ -95,11 +124,10 @@ external module scripts, so injection works as follows:
    placed before the (inlined) application script. On boot the app reads
    `document.getElementById('lore-export')` and parses its text content.
    All JS and CSS are inlined into the same file; there are no other
-   references. When Core emits `lore export --html`, it produces exactly
-   this: the viewer shell with its corpus JSON substituted into that
-   element (escaping `</` as `<\/` and `<!--` as `<\u0021--`,
-   both valid JSON escapes, so the payload is `<script>`-safe and
-   parses unchanged).
+   references. `rac export --html` produces exactly this: the vendored
+   Portal shell with the corpus JSON substituted into that element
+   (escaping `</` as `<\/` and `<!--` as `<\u0021--`, both valid JSON
+   escapes, so the payload is `<script>`-safe and parses unchanged).
 
 2. **Dev server / hosted multi-page build**: no inline element exists,
    so the app falls back to fetching the committed sample corpus
@@ -123,8 +151,25 @@ content present → use it, else fetch".
    and writes `dist/viewer/lore-viewer.html`.
 
 `scripts/build-viewer-artifact.mjs --corpus <path> --out <path>` builds
-the artifact around any conforming export — this is the seam Core's
-`--html` exporter can reuse or replicate.
+the artifact around any conforming export.
+
+### Portal shell (`--shell-only`) and vendoring
+
+`scripts/build-viewer-artifact.mjs --shell-only` emits the same
+single-file artifact with an **empty** data seam —
+`<script type="application/json" id="lore-export"></script>`, no
+whitespace inside the element — and writes it to
+`dist/viewer/lore-portal-shell.html` by default. `rac export --html`
+injects the escaped corpus JSON into that seam; nothing else in the
+file changes.
+
+`npm run vendor:shell` (`scripts/vendor-portal-shell.mjs`) builds the
+shell and commits it into the RAC package as
+`src/rac/templates/portal/lore-portal-shell.html` together with
+`provenance.json` (lore-web source commit, shell hash, viewer
+source-tree hash). A drift-guard test on the Python side fails when the
+viewer source changes without re-vendoring; the normative hash
+algorithm is documented in `scripts/vendor-portal-shell.mjs`.
 
 ### Fonts in the single-file artifact
 
@@ -138,41 +183,54 @@ reference-free. The hosted viewer build keeps the real fonts.
 
 ## 3. Body-HTML trust model
 
-`body_html` is rendered by the viewer **as-is** (assigned to
-`innerHTML`, then known artifact IDs in text nodes are linkified). The
-viewer performs **no sanitisation**. The contract is therefore:
+`body_html` is produced by Core's vendored `markdown-it-py` CommonMark
+renderer with **raw HTML escaped**: HTML written in artifact sources is
+emitted as escaped text, not markup, so an export of repo-resident
+Markdown contains no script elements, no event-handler attributes and
+no external resource loads of its own making.
 
-- **Sanitisation happens at export time.** Lore Core renders trusted,
-  repo-resident Markdown to HTML and is expected to emit a safe subset
-  (no script elements, no event-handler attributes, no external
-  resource loads). The corpus is the user's own repository content,
-  viewed by the person who exported it — the same trust boundary as the
-  repo itself.
-- A hostile `body_html` could execute script in the viewer page. Do not
-  build artifacts from untrusted exports. If exports ever cross a trust
-  boundary (e.g. hosted multi-tenant viewing), sanitisation must be
-  added at that boundary; the viewer itself stays a dumb renderer.
-- Bodies that load external resources (`<img src="http…">`) would break
-  the zero-network-request property; the export side must not emit
-  them.
+The viewer renders `body_html` **as-is** (assigned to `innerHTML`, then
+cited ids and aliases in text nodes are linkified). The viewer performs
+**no sanitisation**. The contract is therefore:
 
-## 4. Viewer behaviour summary (for reconciliation)
+- **Escaping happens at export time, in Core.** The corpus is the
+  user's own repository content, viewed by the person who exported it —
+  the same trust boundary as the repo itself.
+- A hand-crafted hostile `body_html` (i.e. a tampered export document,
+  not one Core produced from Markdown) could execute script in the
+  viewer page. Do not build artifacts from untrusted export documents.
+  If exports ever cross a trust boundary (e.g. hosted multi-tenant
+  viewing), sanitisation must be added at that boundary; the viewer
+  itself stays a dumb renderer.
+- Because raw HTML is escaped, bodies cannot load external resources
+  (`<img src="http…">` arrives as text), preserving the
+  zero-network-request property.
+
+## 4. Viewer behaviour summary
 
 - Read-only; no router dependency — state is hash-based
   (`#/` list, `#/artifact/<id>` detail) so deep links work from
   `file://`.
-- List view: every artifact as a row; filter toggles for type and
-  status derived from the corpus; debounced substring search over
-  id + title + body text; result count announced via `aria-live`.
-- Detail view: title, id, type/status chips, rendered body with
-  cited-ID cross-links, and a related-artifacts panel grouped by edge
-  type in both directions. List form only — a graph visualisation is an
+- List view: every artifact as a row (display name + title + chips);
+  filter toggles for type and status derived from the corpus (status
+  grouped case-insensitively); debounced substring search over
+  id + aliases + title + body text; result count announced via
+  `aria-live`.
+- Detail view: display name, title, type/status chips, a muted
+  provenance line (opaque id + source path), rendered body with cited
+  cross-links, and a related-artifacts panel grouped by edge type in
+  both directions. List form only — a graph visualisation is an
   explicitly deferred decision.
 - Keyboard: `/` focuses search, `Tab` walks rows, `Esc` returns from
   detail to list.
-- ID linkification matches tokens of the shape
-  `[A-Z][A-Z0-9]{1,11}-[0-9]{1,6}` and links only tokens that exist as
-  artifact IDs in the corpus.
+- **Citation linkification**: the viewer builds a case-insensitive
+  lookup over every artifact's `id` and every alias. In body text
+  nodes, candidate tokens — maximal runs of word characters and hyphens
+  starting with a letter, bounded by non-word characters — are linkified
+  only when their lowercased form is in the lookup. So
+  `RAC-KTQ63DSC8SZW`, `ADR-027` and `adr-027-ci-test-topology` all link
+  when they name a corpus artifact; nothing else is touched.
+  Linkification never descends into `<a>`, `<code>` or `<pre>`.
 
 ## 5. Sample data
 
@@ -180,7 +238,9 @@ viewer performs **no sanitisation**. The contract is therefore:
 
 - `src/viewer/sample/lore-export.sample.json` — committed; a
   hand-authored 30-artifact corpus for "ledgerline", a fictional
-  mid-size Python billing service. Its `corpus.name` contains
+  mid-size Python billing service, in the v1 shape (opaque ids, human
+  aliases, paths, authored-case statuses, `relates-to` edges only —
+  including one unresolved alias target). Its `corpus.name` contains
   "SAMPLE DATA" and `sample: true` is set, so every surface that shows
   corpus identity is labelled.
 - `/tmp/lore-export-500.json` — a deterministic 500-artifact synthetic

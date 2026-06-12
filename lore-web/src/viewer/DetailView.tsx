@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { KeyboardHint, Panel } from '../components';
 import type { CorpusIndex } from './data';
-import { linkifyIds } from './data';
+import { displayName, linkifyCitations } from './data';
 import type { Relationship } from './types';
 import { ArtifactChips } from './chips';
 
@@ -20,18 +20,24 @@ function edgeLabel(type: string, direction: 'out' | 'in'): string {
 }
 
 /**
- * Rendered body HTML. The export is trusted (sanitised at export time —
+ * Rendered body HTML. The export is trusted (escaped at export time —
  * see VIEWER_CONTRACT.md); the viewer renders it as-is, then linkifies
- * cited artifact IDs that exist in the corpus.
+ * cited artifact ids and aliases that exist in the corpus.
  */
-function ArtifactBody({ html, idSet }: { html: string; idSet: Set<string> }) {
+function ArtifactBody({
+  html,
+  lookup,
+}: {
+  html: string;
+  lookup: Map<string, string>;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.innerHTML = html;
-    linkifyIds(el, idSet);
-  }, [html, idSet]);
+    linkifyCitations(el, lookup);
+  }, [html, lookup]);
   return <div className="viewer-body" ref={ref} />;
 }
 
@@ -52,7 +58,9 @@ function RelatedGroup({ heading, edges, index, direction }: RelatedGroupProps) {
         const other = index.byId.get(otherId);
         return (
           <li key={`${edge.from}-${edge.type}-${edge.to}`}>
-            <a href={`#/artifact/${encodeURIComponent(otherId)}`}>{otherId}</a>{' '}
+            <a href={`#/artifact/${encodeURIComponent(otherId)}`}>
+              {other ? displayName(other) : otherId}
+            </a>{' '}
             <span className="viewer-related__title">
               {other ? other.title : '(not in corpus)'}
             </span>
@@ -118,12 +126,20 @@ export function DetailView({ index, id }: DetailViewProps) {
       </p>
 
       <header className="viewer-detail__head">
-        <p className="viewer-detail__id">{artifact.id}</p>
+        <p className="viewer-detail__id">{displayName(artifact)}</p>
         <h2 className="viewer-detail__title">{artifact.title}</h2>
         <ArtifactChips artifact={artifact} />
+        <p className="viewer-detail__provenance">
+          {displayName(artifact) !== artifact.id ? (
+            <>
+              {artifact.id} {'·'}{' '}
+            </>
+          ) : null}
+          {artifact.path}
+        </p>
       </header>
 
-      <ArtifactBody html={artifact.body_html} idSet={index.idSet} />
+      <ArtifactBody html={artifact.body_html} lookup={index.citationLookup} />
 
       {groups.length > 0 ? (
         <Panel title="Related artifacts" className="viewer-related">

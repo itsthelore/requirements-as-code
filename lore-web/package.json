@@ -10,7 +10,8 @@
     "contrast": "node scripts/contrast-report.mjs",
     "lantern": "node scripts/make-lantern.mjs",
     "corpus": "node scripts/make-corpus.mjs",
-    "build:viewer": "tsc -b && vite build --config vite.config.viewer.ts && node scripts/build-viewer-artifact.mjs"
+    "build:viewer": "tsc -b && vite build --config vite.config.viewer.ts && node scripts/build-viewer-artifact.mjs",
+    "vendor:shell": "node scripts/vendor-portal-shell.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

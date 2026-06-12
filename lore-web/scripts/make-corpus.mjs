@@ -12,10 +12,13 @@
  *      A deterministic 500-artifact synthetic corpus for performance
  *      testing. NOT committed.
  *
- * Schema: see lore-web/VIEWER_CONTRACT.md (a proposal, to be reconciled
- * with Lore Core's real `lore export --json`).
+ * Schema: reconciled v1 — see lore-web/VIEWER_CONTRACT.md. Matches the
+ * shape of `rac export --json`: string schema_version, opaque artifact
+ * ids with human aliases, source paths, authored-case statuses, and
+ * untyped `relates-to` edges only.
  */
 
+import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,11 +31,38 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const html = (paragraphs) => paragraphs.map((p) => `<p>${p}</p>`).join('\n');
 
+/** "Replace Celery with Dramatiq" -> "replace-celery-with-dramatiq". */
+const slug = (text) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+/** "accepted" -> "Accepted" — RAC statuses are authored capitalised. */
+const cap = (status) => status.charAt(0).toUpperCase() + status.slice(1);
+
+/**
+ * Deterministic opaque id in the Core shape (RAC-<12 uppercase
+ * alphanumerics>), derived from a stable seed so regeneration is
+ * byte-identical.
+ */
+function opaqueId(seed) {
+  const digest = createHash('sha256').update(seed).digest();
+  const alphabet = 'ABCDEFGHJKMNPQRSTVWXYZ0123456789';
+  let out = '';
+  for (let i = 0; i < 12; i++) out += alphabet[digest[i] % alphabet.length];
+  return `RAC-${out}`;
+}
+
 /* ------------------------------------------------------------------ */
 /* 1. hand-authored 30-artifact sample corpus — "ledgerline"           */
 /* ------------------------------------------------------------------ */
 
-// Each entry: [id, type, status, title, [paragraph, ...]]
+// Each entry: [alias key, type, status, title, [paragraph, ...]].
+// The alias key ("ADR-001") becomes the short human alias; the emitted
+// id is an opaque deterministic RAC-style id. Bodies cite other
+// artifacts by alias ("ADR-021"), which the viewer linkifies
+// case-insensitively.
 const SAMPLE = [
   [
     'ADR-001', 'adr', 'accepted', 'Record architecture decisions as ADRs',
@@ -278,46 +308,67 @@ const SAMPLE = [
   ],
 ];
 
-// Typed edges. Direction reads "<from> <type> <to>".
+// Untyped edges, [from alias, to alias] — Core emits only `relates-to`.
+// The supersession/refinement stories stay told in body text. The last
+// edge points at an alias that is not in the corpus, exercising the
+// unresolved-target ("(not in corpus)") rendering the contract keeps.
 const SAMPLE_EDGES = [
-  ['ADR-014', 'supersedes', 'ADR-002'],
-  ['ADR-021', 'supersedes', 'ADR-005'],
-  ['ADR-024', 'supersedes', 'ADR-013'],
-  ['ADR-016', 'refines', 'ADR-015'],
-  ['ADR-008', 'refines', 'ADR-007'],
-  ['STD-002', 'refines', 'ADR-006'],
-  ['STD-001', 'implements', 'ADR-025'],
-  ['STD-001', 'implements', 'ADR-004'],
-  ['ADR-022', 'relates-to', 'ADR-021'],
-  ['ADR-006', 'relates-to', 'ADR-005'],
-  ['ADR-011', 'relates-to', 'ADR-009'],
-  ['ADR-011', 'relates-to', 'ADR-010'],
-  ['ADR-023', 'relates-to', 'ADR-003'],
-  ['ADR-017', 'relates-to', 'ADR-021'],
-  ['ADR-027', 'relates-to', 'ADR-012'],
-  ['ADR-028', 'relates-to', 'ADR-004'],
-  ['ADR-026', 'relates-to', 'ADR-015'],
-  ['ADR-020', 'relates-to', 'ADR-006'],
+  ['ADR-014', 'ADR-002'],
+  ['ADR-021', 'ADR-005'],
+  ['ADR-024', 'ADR-013'],
+  ['ADR-016', 'ADR-015'],
+  ['ADR-008', 'ADR-007'],
+  ['STD-002', 'ADR-006'],
+  ['STD-001', 'ADR-025'],
+  ['STD-001', 'ADR-004'],
+  ['ADR-022', 'ADR-021'],
+  ['ADR-006', 'ADR-005'],
+  ['ADR-011', 'ADR-009'],
+  ['ADR-011', 'ADR-010'],
+  ['ADR-023', 'ADR-003'],
+  ['ADR-017', 'ADR-021'],
+  ['ADR-027', 'ADR-012'],
+  ['ADR-028', 'ADR-004'],
+  ['ADR-026', 'ADR-015'],
+  ['ADR-020', 'ADR-006'],
+  ['ADR-019', 'runbook-billing-period-rollover'],
 ];
 
+const SAMPLE_DIRS = { adr: 'decisions', standard: 'standards' };
+
+const sampleIdByAlias = new Map(
+  SAMPLE.map(([key]) => [key, opaqueId(`ledgerline:${key}`)]),
+);
+
 const sampleExport = {
-  schema_version: 1,
+  schema_version: '1',
   corpus: {
     // The name itself carries the SAMPLE DATA label so any surface
     // that prints it is self-labelling.
     name: 'ledgerline — SAMPLE DATA (fictional service)',
-    generated_at: '2026-06-12T00:00:00Z',
-    lore_version: '0.0.0-sample',
+    rac_version: '0.0.0-sample',
+    artifact_count: SAMPLE.length,
     sample: true,
   },
-  artifacts: SAMPLE.map(([id, type, status, title, paragraphs]) => ({
-    id,
-    type,
-    status,
-    title,
-    body_html: html(paragraphs),
+  artifacts: SAMPLE.map(([key, type, status, title, paragraphs]) => {
+    const short = key.toLowerCase();
+    const long = `${short}-${slug(title)}`;
+    return {
+      id: sampleIdByAlias.get(key),
+      aliases: [short, long],
+      type,
+      status: cap(status),
+      title,
+      path: `lore/${SAMPLE_DIRS[type]}/${long}.md`,
+      body_html: html(paragraphs),
+    };
+  }),
+  relationships: SAMPLE_EDGES.map(([from, to]) => ({
+    from: sampleIdByAlias.get(from) ?? from,
+    // Unresolved aliases are preserved verbatim, as Core emits them.
+    to: sampleIdByAlias.get(to) ?? to,
+    type: 'relates-to',
   })),
-  relationships: SAMPLE_EDGES.map(([from, type, to]) => ({ from, to, type })),
 };
 
 /* ------------------------------------------------------------------ */
@@ -344,8 +395,7 @@ const TOPICS = [
   'data retention', 'currency conversion', 'batch windows', 'error taxonomy',
 ];
 const VERBS = ['Adopt', 'Standardise', 'Constrain', 'Defer', 'Centralise', 'Split'];
-const STATUSES = ['accepted', 'accepted', 'accepted', 'accepted', 'proposed', 'superseded', 'deprecated', 'rejected'];
-const EDGE_TYPES = ['relates-to', 'relates-to', 'refines', 'implements', 'supersedes'];
+const STATUSES = ['Accepted', 'Accepted', 'Accepted', 'Accepted', 'Proposed', 'Superseded', 'Deprecated', 'Rejected'];
 const SENTENCES = [
   'The previous approach produced inconsistent behaviour across workers and made incidents slow to diagnose.',
   'We compared three options against operational cost, blast radius and the team’s existing experience.',
@@ -357,10 +407,14 @@ const SENTENCES = [
   'Exceptions require a written waiver linked from the code in question.',
 ];
 
+// Bodies cite other artifacts by alias ("ADR-042"); edges resolve to
+// the opaque ids, all `relates-to` — the only type Core emits.
+const synthId = (n) => opaqueId(`synthetic-500:${n}`);
+const synthAlias = (n) => `adr-${String(n).padStart(3, '0')}`;
+
 const synthArtifacts = [];
 const synthEdges = [];
 for (let i = 1; i <= 500; i++) {
-  const id = `ADR-${String(i).padStart(3, '0')}`;
   const topic = pick(TOPICS);
   const paragraphs = [];
   const n = 2 + Math.floor(rand() * 3);
@@ -370,28 +424,32 @@ for (let i = 1; i <= 500; i++) {
       : '';
     paragraphs.push(`${pick(SENTENCES)} ${pick(SENTENCES)}${refs}`);
   }
+  const title = `${pick(VERBS)} ${topic} (${i})`;
+  const long = `${synthAlias(i)}-${slug(title)}`;
   synthArtifacts.push({
-    id,
+    id: synthId(i),
+    aliases: [synthAlias(i), long],
     type: rand() < 0.85 ? 'adr' : 'standard',
     status: pick(STATUSES),
-    title: `${pick(VERBS)} ${topic} (${i})`,
+    title,
+    path: `lore/decisions/${long}.md`,
     body_html: html(paragraphs),
   });
   if (i > 1) {
     const edgeCount = 1 + Math.floor(rand() * 2);
     for (let e = 0; e < edgeCount; e++) {
-      const to = `ADR-${String(1 + Math.floor(rand() * (i - 1))).padStart(3, '0')}`;
-      synthEdges.push({ from: id, to, type: pick(EDGE_TYPES) });
+      const to = synthId(1 + Math.floor(rand() * (i - 1)));
+      synthEdges.push({ from: synthId(i), to, type: 'relates-to' });
     }
   }
 }
 
 const synthExport = {
-  schema_version: 1,
+  schema_version: '1',
   corpus: {
     name: 'synthetic-500 — SAMPLE DATA (performance test corpus)',
-    generated_at: '2026-06-12T00:00:00Z',
-    lore_version: '0.0.0-sample',
+    rac_version: '0.0.0-sample',
+    artifact_count: synthArtifacts.length,
     sample: true,
   },
   artifacts: synthArtifacts,

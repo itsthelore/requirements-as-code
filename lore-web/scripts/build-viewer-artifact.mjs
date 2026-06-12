@@ -20,6 +20,12 @@
  *   node scripts/build-viewer-artifact.mjs
  *     [--corpus path/to/lore-export.json]   default: the committed sample
  *     [--out path/to/output.html]           default: dist/viewer/lore-viewer.html
+ *     [--shell-only]                        emit the Portal shell instead
+ *
+ * --shell-only emits the same single-file artifact with an EMPTY data
+ * seam — <script type="application/json" id="lore-export"></script> —
+ * for `rac export --html` to inject a corpus into. Default --out then
+ * becomes dist/viewer/lore-portal-shell.html.
  */
 
 import { gzipSync } from 'node:zlib';
@@ -34,8 +40,12 @@ function arg(flag, fallback) {
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 }
 
+const shellOnly = process.argv.includes('--shell-only');
 const corpusPath = resolve(root, arg('--corpus', 'src/viewer/sample/lore-export.sample.json'));
-const outPath = resolve(root, arg('--out', 'dist/viewer/lore-viewer.html'));
+const outPath = resolve(
+  root,
+  arg('--out', shellOnly ? 'dist/viewer/lore-portal-shell.html' : 'dist/viewer/lore-viewer.html'),
+);
 const buildDir = resolve(root, 'dist/.viewer-build');
 const htmlPath = resolve(buildDir, 'viewer/index.html');
 
@@ -93,13 +103,19 @@ if (fileUrls.length > 0) {
 
 /* ---- corpus JSON ------------------------------------------------------- */
 
-const corpusRaw = readFileSync(corpusPath, 'utf8');
-const corpus = JSON.parse(corpusRaw); // validate
-// Make the JSON safe inside a <script> element. Both replacements are
-// valid JSON escapes, so the payload parses unchanged.
-const corpusInline = JSON.stringify(corpus)
-  .replaceAll('</', '<\\/')
-  .replaceAll('<!--', '<\\u0021--');
+// Shell-only: the data seam stays empty (no whitespace inside the
+// element) so the exporter can substitute its corpus byte-for-byte.
+let corpus = null;
+let corpusInline = '';
+if (!shellOnly) {
+  const corpusRaw = readFileSync(corpusPath, 'utf8');
+  corpus = JSON.parse(corpusRaw); // validate
+  // Make the JSON safe inside a <script> element. Both replacements are
+  // valid JSON escapes, so the payload parses unchanged.
+  corpusInline = JSON.stringify(corpus)
+    .replaceAll('</', '<\\/')
+    .replaceAll('<!--', '<\\u0021--');
+}
 
 /* ---- assemble ---------------------------------------------------------- */
 
@@ -132,5 +148,9 @@ const bytes = Buffer.byteLength(html);
 const gzip = gzipSync(Buffer.from(html), { level: 9 }).length;
 const kb = (n) => `${(n / 1024).toFixed(1)} KB`;
 console.log(`wrote ${outPath}`);
-console.log(`  corpus: ${corpusPath} (${corpus.artifacts.length} artifacts)`);
+if (corpus) {
+  console.log(`  corpus: ${corpusPath} (${corpus.artifacts.length} artifacts)`);
+} else {
+  console.log('  corpus: none (shell-only — empty #lore-export data seam)');
+}
 console.log(`  size: ${kb(bytes)} raw, ${kb(gzip)} gzipped`);

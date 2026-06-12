@@ -88,8 +88,13 @@ export function App() {
               ) : null}
             </p>
             <p className="viewer-meta__line">
-              generated {corpus.generated_at} {'·'} lore {corpus.lore_version}{' '}
-              {'·'} {data ? data.artifacts.length : 0} artifacts {'·'} read-only
+              {corpus.rac_version ? (
+                <>
+                  rac {corpus.rac_version} {'·'}{' '}
+                </>
+              ) : null}
+              {corpus.artifact_count ?? data?.artifacts.length ?? 0} artifacts{' '}
+              {'·'} read-only
             </p>
           </header>
         ) : null}
