@@ -26,9 +26,56 @@ from rac.services.compare import (
     compare_states,
     load_state,
 )
-from rac.services.intent import IntentFinding, analyze_intent
+from rac.services.intent import (
+    ACCEPTANCE_CRITERIA_REMOVED,
+    CONSTRAINT_REMOVED,
+    CONSTRAINT_WEAKENED,
+    SEVERITY_WARNING,
+    SPECIFICITY_REGRESSION,
+    SUCCESS_MEASURES_REMOVED,
+    IntentFinding,
+    analyze_intent,
+)
 from rac.services.relationships import RelationshipSummary
 from rac.services.revisions import materialized_revision, repository_root
+
+# Recommendation reason codes (part of the JSON contract, ADR-007). The
+# delta-driven codes are watchkeeper's own; the finding-driven codes reuse
+# the intent vocabulary verbatim.
+REASON_VALIDATION_REGRESSION = "validation_regression"
+REASON_BROKEN_RELATIONSHIP = "broken_relationship"
+
+# Findings that recommend review on their own. Ambiguity, unlinked scope,
+# and relationship impact inform but never recommend (v0.12.2 contract).
+RECOMMENDING_FINDINGS = frozenset(
+    {
+        SPECIFICITY_REGRESSION,
+        CONSTRAINT_WEAKENED,
+        CONSTRAINT_REMOVED,
+        ACCEPTANCE_CRITERIA_REMOVED,
+        SUCCESS_MEASURES_REMOVED,
+    }
+)
+
+# Core-owned reason sentences, one per code (mirrors review.py's impact
+# phrasing): consumers render these, they do not compose their own.
+_REASONS = {
+    REASON_VALIDATION_REGRESSION: "One or more artifacts became invalid.",
+    REASON_BROKEN_RELATIONSHIP: "One or more relationship references broke.",
+    SPECIFICITY_REGRESSION: "A measurable requirement became vague.",
+    CONSTRAINT_WEAKENED: "A mandatory requirement was weakened.",
+    CONSTRAINT_REMOVED: "A requirement with mandatory wording was removed.",
+    ACCEPTANCE_CRITERIA_REMOVED: "An acceptance criteria section was removed.",
+    SUCCESS_MEASURES_REMOVED: "A success measures section was removed.",
+}
+
+
+@dataclass(frozen=True)
+class ReviewRecommendation:
+    """One deterministic reason human review is recommended."""
+
+    code: str
+    reason: str
 
 
 @dataclass
@@ -40,10 +87,19 @@ class WatchkeeperReport:
     head: str  # head label: revision name or directory path (working tree)
     comparison: RepositoryComparison
     findings: list[IntentFinding] = field(default_factory=list)  # v0.12.1, additive
+    recommendations: list[ReviewRecommendation] = field(default_factory=list)  # v0.12.2
 
     @property
     def has_changes(self) -> bool:
         return bool(self.comparison.changes)
+
+    @property
+    def review_recommended(self) -> bool:
+        return bool(self.recommendations)
+
+    @property
+    def has_warnings(self) -> bool:
+        return any(f.severity == SEVERITY_WARNING for f in self.findings)
 
     def to_dict(self) -> dict:
         validation = self.comparison.validation
@@ -76,6 +132,13 @@ class WatchkeeperReport:
             },
             # Additive in v0.12.1 (ADR-007): deterministic intent findings.
             "findings": [_finding_dict(finding) for finding in self.findings],
+            # Additive in v0.12.2 (ADR-007): the review verdict and reasons.
+            "review": {
+                "recommended": self.review_recommended,
+                "reasons": [
+                    {"code": rec.code, "reason": rec.reason} for rec in self.recommendations
+                ],
+            },
         }
 
 
@@ -139,6 +202,25 @@ def _finding_dict(finding: IntentFinding) -> dict:
     }
 
 
+def derive_recommendations(
+    comparison: RepositoryComparison, findings: list[IntentFinding]
+) -> list[ReviewRecommendation]:
+    """The deterministic finding/delta → reason mapping (v0.12.2).
+
+    Reasons are deduplicated by code and ordered: validation regressions,
+    broken relationships, then finding-driven reasons in finding order.
+    """
+    codes: list[str] = []
+    if comparison.validation.newly_invalid:
+        codes.append(REASON_VALIDATION_REGRESSION)
+    if comparison.relationships.new_issues:
+        codes.append(REASON_BROKEN_RELATIONSHIP)
+    for finding in findings:
+        if finding.code in RECOMMENDING_FINDINGS and finding.code not in codes:
+            codes.append(finding.code)
+    return [ReviewRecommendation(code=code, reason=_REASONS[code]) for code in codes]
+
+
 def _resolve_side(stack: ExitStack, directory: str, ref: str) -> str:
     """A directory for one comparison side: ``ref`` itself, or a materialization."""
     if Path(ref).is_dir():
@@ -171,4 +253,5 @@ def build_watchkeeper_report(
         head=head_label,
         comparison=comparison,
         findings=findings,
+        recommendations=derive_recommendations(comparison, findings),
     )
