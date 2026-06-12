@@ -69,3 +69,18 @@ traceability work from real corpus usage.
 ## Related Decisions
 
 - adr-036
+
+## Related Requirements
+
+- rac-growth-positioning
+- rac-growth-adoption
+- rac-growth-agent-skill
+- rac-growth-contribution-policy
+- rac-growth-essay-bridge
+- rac-growth-extensibility
+- rac-growth-ecosystem-list
+
+## Related Designs
+
+- growth-demo-gif
+- growth-essay-mapping
