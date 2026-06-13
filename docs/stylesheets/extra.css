@@ -96,12 +96,20 @@ body,
 /* ===================================================================== */
 .lore-splash {
   display: flex;
-  align-items: center;
-  gap: 2.5rem;
+  flex-direction: column;
+  gap: 1.75rem;
   max-width: 58rem;
   margin: 0 auto;
   padding: 3rem 1rem 2rem;
   text-align: left;
+}
+
+/* Lead row: mascot left, headline + subhead right, top-aligned so the
+   mascot's top sits with the first line of the headline. */
+.lore-splash__lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 2.5rem;
 }
 
 .lore-splash__mascot {
@@ -109,6 +117,7 @@ body,
   width: 220px;
   height: auto;
   display: block;
+  margin-top: -0.5rem;
   padding: 1rem;
   border-radius: 1.25rem;
   background: radial-gradient(
@@ -118,7 +127,7 @@ body,
   );
 }
 
-.lore-splash__body {
+.lore-splash__intro {
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -129,25 +138,37 @@ body,
   font-weight: 700;
   line-height: 1.3;
   margin: 0 0 0.5rem;
-  max-width: 28rem;
 }
 
 .lore-splash__sub {
   color: var(--lore-text-muted);
   font-size: 1rem;
-  margin: 0 0 1.5rem;
+  margin: 0;
+}
+
+/* Actions band: full width beneath the lead row. */
+.lore-splash__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 /* Install command — dashed terminal chrome, teal command text. */
 .lore-install {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.5rem;
+  width: 100%;
   background: var(--lore-bg-panel);
   border: 1px dashed var(--lore-border);
-  padding: 0.55rem 0.75rem;
-  margin: 0 auto;
-  max-width: 100%;
+  padding: 0.65rem 0.85rem;
+  margin: 0;
+}
+.lore-install code {
+  flex: 1 1 auto;
+}
+.lore-install__copy {
+  flex: 0 0 auto;
 }
 .lore-install__prompt {
   color: var(--lore-text-muted);
@@ -186,7 +207,7 @@ body,
 .lore-splash__note {
   color: var(--lore-text-muted);
   font-size: 0.8rem;
-  margin: 0.75rem 0 1.5rem;
+  margin: 0;
 }
 .lore-splash__note code {
   background: none;
@@ -258,12 +279,15 @@ body,
 
 @media screen and (max-width: 48rem) {
   .lore-splash {
-    flex-direction: column;
     text-align: center;
+  }
+  .lore-splash__lead {
+    flex-direction: column;
+    align-items: center;
     gap: 1.25rem;
   }
-  .lore-splash__title {
-    max-width: none;
+  .lore-splash__mascot {
+    margin-top: 0;
   }
   .lore-cta {
     justify-content: center;

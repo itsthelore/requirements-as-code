@@ -10,15 +10,19 @@
 
 {% block content %}
 <section class="lore-splash" markdown="0">
-  <img
-    class="lore-splash__mascot"
-    src="{{ 'images/lamplighter.png' | url }}"
-    alt="The Lore lamplighter, lantern raised"
-    width="200" height="158">
-  <div class="lore-splash__body">
-    <h1 class="lore-splash__title">Give your coding agent the decisions your team already made — so it stops re-doing things you ruled out.</h1>
-    <p class="lore-splash__sub">Agents that know why.</p>
+  <div class="lore-splash__lead">
+    <img
+      class="lore-splash__mascot"
+      src="{{ 'images/lamplighter.png' | url }}"
+      alt="The Lore lamplighter, lantern raised"
+      width="200" height="158">
+    <div class="lore-splash__intro">
+      <h1 class="lore-splash__title">Give your coding agent the decisions your team already made — so it stops re-doing things you ruled out.</h1>
+      <p class="lore-splash__sub">Agents that know why.</p>
+    </div>
+  </div>
 
+  <div class="lore-splash__actions">
     <div class="lore-install">
       <span class="lore-install__prompt">$</span>
       <code id="lore-install-cmd">pip install requirements-as-code</code>
