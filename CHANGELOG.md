@@ -109,6 +109,28 @@ details, release history over commit history.
   export; `--share` prints a prefilled GitHub usage-report issue URL you
   review and submit yourself — RAC contains no network code).
 
+- Explorer knowledge-graph grammar (v0.8.13): the Explorer's **Links** tab
+  now renders relationships in the designed terminal grammar — a vertical
+  dependency chain from the artifact to what it relates to (each `↓` carrying
+  the relationship kind), an **Impact Analysis** block that frames a change
+  ("Changing: … / May affect: …"), and a `↓`-joined lineage chain for
+  supersession. The relationships are unchanged — only their presentation —
+  so "why does this exist?", "what depends on this?", and "what happens if
+  this changes?" read directly. Presentation only; no Core, adapter, or
+  state change.
+
+- Explorer mascot interaction (v0.8.12): selecting the mascot in the
+  Explorer — a click, or keyboard focus then Enter — returns a small
+  response beneath the figure: a default acknowledgement, occasional
+  reminders of why product knowledge is worth keeping, gentle guidance
+  toward existing commands, and one rare line on repeated selection.
+  Responses appear inline with no popup, dialog, or notification, and
+  nothing is hidden behind them — the mascot surfaces functionality, it
+  does not contain it. A new `mascot_interaction` preference (default on,
+  cycled in `/settings`) turns it off independently of the mascot and
+  animation toggles, and selection works with animations off. No Core or
+  service changes.
+
 - Review impact and the first-run editor (v0.8.11): every `rac review`
   finding now carries an `impact` sentence — why it matters — owned by Core
   and present in the JSON contract (additive field; `schema_version`

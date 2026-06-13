@@ -562,7 +562,11 @@ async def test_links_tab_traverses_to_a_connected_artifact():
         await pilot.pause()
         assert app.screen.query_one(TabbedContent).active == "tab-links"
         panel = str(app.screen.query_one("#relationship-panel", Static).content)
-        assert "Relationships" in panel and "Impact" in panel and "Lineage" in panel
+        # The knowledge-graph grammar: a Relationships chain, an Impact
+        # Analysis block, and a Lineage section (DESIGN-knowledge-graph).
+        assert "Relationships" in panel and "Lineage" in panel
+        assert "Impact Analysis" in panel
+        assert "Changing:" in panel and "May affect:" in panel
 
         await pilot.press("enter")  # open the first connected artifact
         await pilot.pause()
@@ -573,6 +577,44 @@ async def test_links_tab_traverses_to_a_connected_artifact():
         await pilot.pause()
         title = str(app.screen.query_one("#context-region").border_title)
         assert "adr-001" in title
+
+
+def test_render_sections_uses_knowledge_graph_grammar():
+    # DESIGN-knowledge-graph: dependency chain, Impact Analysis block, lineage
+    # chain — a pure render over RelationshipsView, no fixtures needed.
+    from rac.explorer.state import RelationshipLink, RelationshipsView
+    from rac.explorer.widgets.views import render_sections
+
+    view = RelationshipsView(
+        id="REQ-004",
+        title="Payment Retry",
+        path="rac/requirements/req-004.md",
+        outgoing=(RelationshipLink("Related Decisions", "ADR-012 (Provider)", "p.md", True),),
+        impact=(RelationshipLink("Superseded By", "PROMPT-007", "q.md", True),),
+        lineage=("Supersedes → ADR-001", "Superseded By ← ADR-020"),
+    )
+    out = render_sections(view)
+
+    # Relationships render as a chain whose ↓ carries the edge kind.
+    assert "REQ-004" in out
+    assert "↓ Related Decisions" in out
+    assert "ADR-012 (Provider)" in out
+    # Impact Analysis frames the change.
+    assert "Impact Analysis" in out
+    assert "Changing:" in out and "May affect:" in out
+    assert "PROMPT-007 (Superseded By)" in out
+    # Lineage steps join into a vertical chain (one ↓ between two steps).
+    lineage = out.split("Lineage", 1)[1]
+    assert lineage.count("↓") == 1
+    assert "Supersedes → ADR-001" in lineage and "Superseded By ← ADR-020" in lineage
+
+    # Empty sections keep plain-language fallbacks.
+    bare = render_sections(
+        RelationshipsView(id="X", title=None, path="x.md", outgoing=(), impact=(), lineage=())
+    )
+    assert "none declared" in bare
+    assert "nothing depends on this artifact" in bare
+    assert "no recorded supersession" in bare
 
 
 @pytest.mark.asyncio
@@ -788,7 +830,14 @@ async def test_slash_settings_opens_interactive_view():
         assert app.screen.current_view == "view-settings"
         listing = app.screen.query_one("#settings-list", OptionList)
         keys = [listing.get_option_at_index(i).id for i in range(listing.option_count)]
-        assert keys == ["theme", "mascot", "animations", "artifact_grouping", "editor"]
+        assert keys == [
+            "theme",
+            "mascot",
+            "animations",
+            "mascot_interaction",
+            "artifact_grouping",
+            "editor",
+        ]
         footer = str(app.screen.query_one("#settings-footer", Static).content)
         assert "explorer.json" in footer
 
@@ -842,7 +891,7 @@ async def test_settings_editor_row_takes_typed_input():
     async with app.run_test() as pilot:
         await _settled_panel_text(app, pilot)
         await _open_settings(app, pilot)
-        await pilot.press("down", "down", "down", "down", "enter")  # editor row
+        await pilot.press("down", "down", "down", "down", "down", "enter")  # editor row
         await pilot.pause()
         field = app.screen.query_one("#settings-editor-input", Input)
         assert field.display and app.focused is field
@@ -869,7 +918,7 @@ async def test_settings_grouping_cycles_three_values_and_rebuilds_sidebar():
         await _open_settings(app, pilot)
         sidebar = app.screen.query_one(NavigationSidebar)
 
-        await pilot.press("down", "down", "down", "enter")  # folders → type
+        await pilot.press("down", "down", "down", "down", "enter")  # folders → type
         await pilot.pause()
         assert load_preferences().artifact_grouping == "type"
         assert all((node.data or "").startswith("group:") for node in sidebar.root.children)
@@ -1028,6 +1077,81 @@ async def test_mascot_searches_while_loading(fresh_first_run):
         )
         art = app.screen.query_one("#mascot", Static)
         assert mascot.label(mascot.SEARCHING) in str(art.content)
+
+
+def test_mascot_interaction_message_is_deterministic():
+    # DESIGN-mascot-interaction: a pure, testable mapping from selection count
+    # to response — acknowledgement first, rare line at exactly RARE_AT,
+    # guidance on a cadence, discovery messages rotating otherwise.
+    assert mascot.interaction_message(1) == mascot.ACK
+    assert mascot.interaction_message(0) == mascot.ACK  # never negative-indexes
+    assert mascot.interaction_message(2) == mascot.DISCOVERY_MESSAGES[0]
+    assert mascot.interaction_message(3) == mascot.DISCOVERY_MESSAGES[1]
+    assert mascot.interaction_message(4) == mascot.GUIDANCE
+    assert mascot.interaction_message(mascot.RARE_AT) == mascot.RARE
+    # The rare line wins even though its position is otherwise a discovery slot.
+    assert mascot.RARE not in {mascot.interaction_message(n) for n in range(1, mascot.RARE_AT)}
+    # Deterministic and total over a wide range; every response is real text.
+    for count in range(0, 60):
+        first = mascot.interaction_message(count)
+        assert first == mascot.interaction_message(count)
+        assert first.strip()
+
+
+@pytest.mark.asyncio
+async def test_mascot_selection_appends_response(fresh_first_run):
+    from rac.explorer.widgets.views import MascotArt
+
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        art = app.screen.query_one("#mascot", MascotArt)
+        assert art.can_focus  # selectable by default (DESIGN-mascot-interaction)
+        figure_only = str(art.content)
+        assert mascot.ACK not in figure_only  # no response until selected
+
+        art.focus()
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert mascot.ACK in str(art.content)  # inline, no popup
+
+        # Repeated selection rotates through discovery and reaches the rare line.
+        for _ in range(mascot.RARE_AT - 1):
+            await pilot.press("enter")
+            await pilot.pause()
+        assert mascot.RARE in str(art.content)
+
+
+@pytest.mark.asyncio
+async def test_mascot_click_selects(fresh_first_run):
+    from rac.explorer.widgets.views import MascotArt
+
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.click("#mascot")
+        await pilot.pause()
+        art = app.screen.query_one("#mascot", MascotArt)
+        assert mascot.ACK in str(art.content)
+
+
+@pytest.mark.asyncio
+async def test_mascot_interaction_can_be_disabled(fresh_first_run, tmp_path, monkeypatch):
+    from rac.explorer.preferences import Preferences, save_preferences
+    from rac.explorer.widgets.views import MascotArt
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    save_preferences(Preferences(mascot_interaction=False))
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        text = await _settled_panel_text(app, pilot)
+        art = app.screen.query_one("#mascot", MascotArt)
+        assert art.display  # mascot still present (its own toggle is on)
+        assert not art.can_focus  # but inert
+        art.activate()  # selecting it does nothing
+        assert mascot.ACK not in str(art.content)
+        assert "Repository found" in text  # and the Explorer is unaffected
 
 
 # --- health and recommendations ----------------------------------------------------
