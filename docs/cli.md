@@ -311,7 +311,7 @@ answers "what changed, and how did it move the repository?".
 `--base` and `--head` each accept a git revision (`main`,
 `origin/some-branch`, a commit SHA) **or** an existing directory path —
 directories are compared as-is, with no git involved. Revisions are
-materialized read-only via `git archive` (ADR-042): nothing mutates your
+materialized read-only via `git archive` (ADR-043): nothing mutates your
 repository, and only the corpus subpath is extracted.
 
 ```bash

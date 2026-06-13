@@ -3,7 +3,7 @@ schema_version: 1
 id: RAC-KTYZVKZQWD98
 type: decision
 ---
-# ADR-042: Watchkeeper Revision Materialization
+# ADR-043: Watchkeeper Revision Materialization
 
 ## Status
 

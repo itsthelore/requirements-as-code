@@ -26,7 +26,7 @@ codes, the JSON contract, and the exit-code policy. The short version:
 - `--format github` writes a Markdown report to stdout (for the step
   summary) and inline-annotation workflow commands to stderr.
 
-Revisions are materialized read-only with `git archive` (ADR-042): no
+Revisions are materialized read-only with `git archive` (ADR-043): no
 worktrees, no `.git` mutation, safe under concurrent CI runs.
 
 ## The GitHub Action
