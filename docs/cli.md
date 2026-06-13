@@ -439,13 +439,17 @@ it shows is also available through `rac portfolio`, `rac index`, `rac resolve`,
   invalid repository) and is skipped for returning users; a lantern-carrying
   mascot animates in the welcome, empty, and loading states (static with
   `animations = off`, hidden with `mascot = off` — no information is lost).
+  Selecting the mascot (a click, or keyboard focus then Enter) returns a small
+  response inline — an acknowledgement, an occasional reminder, gentle guidance
+  toward existing commands, and one rare line — with no popup and nothing
+  hidden behind it; turn it off independently with `mascot_interaction = off`.
   One optional editor step follows the welcome: Enter accepts (an empty
   value keeps the `$VISUAL`/`$EDITOR` fallback), typing sets the `editor`
   preference, Esc skips — `/settings` can change it any time.
 - **Settings & continuity:** `/settings` changes everything in place — theme
   (default `rac-lantern`; Enter cycles every Textual theme with live
-  preview), mascot, animations, artifact grouping (`folders` default), and
-  the editor command —
+  preview), mascot, animations, mascot interaction, artifact grouping
+  (`folders` default), and the editor command —
   persisted to `$XDG_CONFIG_HOME/rac/explorer.json` (no login, cloud, or
   sync). Explorer remembers recently opened repositories plus the last
   artifact and view per repository (under `$XDG_STATE_HOME/rac/`); `.` or

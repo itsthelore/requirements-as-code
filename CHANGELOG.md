@@ -8,6 +8,18 @@ details, release history over commit history.
 
 ### Added
 
+- Explorer mascot interaction (v0.8.12): selecting the mascot in the
+  Explorer — a click, or keyboard focus then Enter — returns a small
+  response beneath the figure: a default acknowledgement, occasional
+  reminders of why product knowledge is worth keeping, gentle guidance
+  toward existing commands, and one rare line on repeated selection.
+  Responses appear inline with no popup, dialog, or notification, and
+  nothing is hidden behind them — the mascot surfaces functionality, it
+  does not contain it. A new `mascot_interaction` preference (default on,
+  cycled in `/settings`) turns it off independently of the mascot and
+  animation toggles, and selection works with animations off. No Core or
+  service changes.
+
 - Portal export (v0.11.0): `rac export` turns a repository's corpus
   into shareable artifacts. The default mode prints a deterministic
   JSON payload to stdout — artifacts with stable ids, aliases, type,
