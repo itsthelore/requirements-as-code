@@ -87,6 +87,17 @@ Lore asks you to trust it with your product knowledge, so it holds itself to the
 - **Output is a contract.** Golden tests pin CLI and MCP output; any change to what the tools return is reviewed as a product change.
 - **Telemetry is opt-in twice over.** Local recording needs an explicit `--telemetry` flag and never includes your arguments or repository content. Remote sharing is a separate, explicit consent (`rac telemetry on`, or one honest question at `rac init`): one anonymous daily ping — a random install id, the version, and an active-repo count — never paths, queries, or content. `rac telemetry status` shows exactly what is shared, the network surface is a single readable module, and ADR-041 records the decision.
 
+## Sharing the corpus (the Portal)
+
+Agents read your lore over MCP; people get the Portal — a single self-contained HTML file of the whole corpus that opens from `file://` with zero network requests. Attach it to a release, send it to a stakeholder, open it on a plane.
+
+```bash
+rac export rac/                                  # canonical JSON to stdout
+rac export rac/ --html --out lore-export.html    # the Portal, one file
+```
+
+The JSON payload is a stable contract (artifacts with ids, aliases, status, rendered bodies; relationships as edges) for anyone building their own viewer. The Portal ships search, type/status filters, and citation cross-links out of the box.
+
 ---
 
 Lore is early and evolving quickly. The MCP server ships today; feedback from teams running agents in anger is exactly what shapes what comes next. Contributions, ideas, and experiments welcome — see [CONTRIBUTING.md](https://github.com/tcballard/requirements-as-code/blob/main/CONTRIBUTING.md).

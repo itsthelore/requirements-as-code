@@ -46,6 +46,7 @@ Claude Desktop / Cursor (`mcpServers` in the client config):
 rac validate rac/          # check every artifact in a directory
 rac inspect requirement.md # see its type and completeness
 rac review rac/            # full repository review, worst problems first
+rac export rac/ --html --out lore-export.html    # the Portal, one file
 ```
 
 ## Who it's for
