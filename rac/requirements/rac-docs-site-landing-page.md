@@ -33,7 +33,7 @@ front door; this artifact governs that page.
 
 - [REQ-006] The page MUST include a "what it is" section containing the agent-grounding value proposition and the Lore-product / RAC-engine naming, relocated verbatim from the README.
 
-- [REQ-007] Below the fold, the page MUST contain, in this order: "Why this works"; the spec-driven-development positioning paragraph with the Lore / GitHub Spec Kit / OpenSpec comparison table and its sources comment; "How Lore earns trust"; and footer links (GitHub repository, project status one-liner, CONTRIBUTING, MIT license) — each relocated verbatim from the README.
+- [REQ-007] Below the fold, the page MUST contain, in this order: "Why this works"; the spec-driven-development positioning paragraph with the Lore / GitHub Spec Kit / OpenSpec comparison table and its sources comment; "How Lore earns trust"; "Sharing the corpus (the Portal)" (added to the README by the v0.11.0 portal-export release and absorbed here under the same drift policy); and footer links (GitHub repository, project status one-liner, CONTRIBUTING, MIT license) — each relocated verbatim from the README.
 
 - [REQ-008] The page MUST be built with stock Material theme capabilities; custom HTML/CSS MAY be used only where a requirement in this artifact is unreachable without it, and any such code MUST be confined to a single override file.
 
