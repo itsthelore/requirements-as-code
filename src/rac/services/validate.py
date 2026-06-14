@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass
 from rac.core.artifacts import spec_for
 from rac.core.corpus import CorpusEntry, walk_corpus
 from rac.core.models import Issue
-from rac.core.overrides import EMPTY, SeverityOverrides, apply_overrides
+from rac.core.overrides import SeverityOverrides, apply_overrides
 from rac.core.validation import has_errors, validate
 
 from .init import load_overrides
@@ -121,18 +121,21 @@ def validate_corpus(
     directory: str,
     entries: list[CorpusEntry],
     recursive: bool = True,
-    overrides: SeverityOverrides = EMPTY,
+    overrides: SeverityOverrides | None = None,
 ) -> DirectoryValidation:
     """Validate an already-walked corpus snapshot (v0.8.0).
 
     Same result as :func:`validate_directory`; the snapshot lets one walk
     feed several analyses (repository model, future incremental refresh).
-    Severity overrides (ADR-053) default to :data:`~rac.core.overrides.EMPTY` so
-    consumers that hold their own snapshot (the repository model behind review /
-    watchkeeper / portfolio) are unchanged; ``validate_directory`` loads the
-    repository's overrides and passes them. Overrides are applied before status
-    and exit code are computed, so a downgraded type or rule keeps the run green.
+    Severity overrides (ADR-053) are repository-wide: when not supplied they are
+    loaded from the directory's ``.rac/config.yaml``, so the repository model
+    behind review / watchkeeper / portfolio honours the same policy as
+    ``rac validate``. Pass :data:`~rac.core.overrides.EMPTY` to opt out. Overrides
+    are applied before status and exit code are computed, so a downgraded type or
+    rule keeps the run green.
     """
+    if overrides is None:
+        overrides = load_overrides(directory)
     files: list[FileValidation] = []
     for entry in entries:
         path, product = entry.path, entry.product
