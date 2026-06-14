@@ -170,6 +170,7 @@ ARTIFACT_SPECS: tuple[ArtifactSpec, ...] = (
             "related requirements",
             "related roadmaps",
             "related designs",
+            "related decisions",
         ),
         metadata={
             "status": ("Proposed", "Accepted", "Superseded", "Deprecated"),
@@ -180,6 +181,7 @@ ARTIFACT_SPECS: tuple[ArtifactSpec, ...] = (
             "related requirements",
             "related roadmaps",
             "related designs",
+            "related decisions",
         ),
         guidance={
             "context": (
@@ -220,6 +222,7 @@ ARTIFACT_SPECS: tuple[ArtifactSpec, ...] = (
             "related requirements",
             "related prompts",
             "related designs",
+            "related roadmaps",
         ),
         descriptions={
             "outcomes": "The user, business, or operational outcomes this roadmap pursues",
@@ -232,6 +235,7 @@ ARTIFACT_SPECS: tuple[ArtifactSpec, ...] = (
                 "related requirements",
                 "related prompts",
                 "related designs",
+                "related roadmaps",
             ),
         },
         guidance={
