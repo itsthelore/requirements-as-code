@@ -8,6 +8,21 @@ details, release history over commit history.
 
 ### Added
 
+- Relationship-graph integrity (v0.16.0): `rac relationships --validate` now
+  validates the corpus as a graph (ADR-055). A `## Related <Type>` reference that
+  resolves to the wrong artifact type is reported as
+  `relationship-target-type-mismatch` (untyped-document targets are exempt,
+  ADR-010), and a cycle in `supersedes` as `relationship-cycle`. Lifecycle status
+  is generalized to all five artifact types (ADR-051): each type has an optional,
+  validated `## Status` enum and a retired set, so the "nothing live points at a
+  retired artifact" rule (`relationship-target-superseded`) now covers
+  requirements, designs, roadmaps, and prompts, not just decisions — status stays
+  a knowledge lifecycle, never work state (ADR-017). The MCP `get_summary` tool
+  (and `rac portfolio`) gain an additive `validation_status` block reporting the
+  repository gate; the four read-only MCP tools are unchanged in count. The edge
+  vocabulary (`related_*` + `supersedes`) and existing issue codes are unchanged;
+  custom relationship types remain deferred (ADR-052).
+
 - Validation severity overrides + SARIF output (v0.15.2): a repository may declare
   an optional `validation` section in its committed `.rac/config.yaml` to downgrade
   or silence findings — per rule code (`error|warning|off`) and per artifact type

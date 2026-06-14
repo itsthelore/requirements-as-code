@@ -67,9 +67,41 @@ each problem and exits `1`. The issue codes:
 | `relationship-target-ambiguous` | The referenced id matches more than one artifact. |
 | `relationship-self-reference` | An artifact references itself. |
 | `duplicate-artifact-identifier` | Two artifacts resolve to the same id. |
+| `relationship-edge-unsupported` | A relationship section the artifact's type does not declare. |
+| `relationship-target-type-mismatch` | A reference resolves to the wrong artifact type for the edge. |
+| `relationship-target-superseded` | A live artifact points at a retired (superseded/deprecated) target. |
+| `relationship-cycle` | A cycle in a directional, acyclic edge (`supersedes`). |
 
 Exit codes follow the standard convention: `0` all references valid · `1` issues
 found · `2` path not found.
+
+## Graph integrity
+
+Beyond resolving each reference, `rac relationships --validate` validates the
+corpus *as a graph* (ADR-055). Each relationship kind has a declared schema —
+its target type (**range**), whether it is directional, and whether it may form a
+cycle:
+
+- **Range.** `## Related Decisions` must point at a decision, `## Related
+  Roadmaps` at a roadmap, and so on; `## Supersedes` is decision→decision. A
+  reference that resolves to the wrong *recognized* type is
+  `relationship-target-type-mismatch`. An untyped document target is exempt — it
+  is a legitimate document (ADR-010), owned by referential integrity.
+- **Acyclicity.** `supersedes` is an ordering edge, so a cycle (A supersedes B
+  supersedes A) is illegal and reported as `relationship-cycle`. The undirected
+  `related_*` links never cycle.
+- **Status-consistency.** A live artifact of *any* type must not point at a
+  retired one. Lifecycle status (ADR-051) is an optional `## Status` section per
+  type — decisions/requirements/designs use `Proposed`/`Accepted` (live) and
+  `Superseded`/`Deprecated` (retired); prompts use `Active`/`Deprecated`;
+  roadmaps use `Planned` and `Superseded`/`Abandoned`. A reference to a retired
+  target is `relationship-target-superseded`, except `supersedes` (by which a
+  replacing decision legitimately points at the one it retires).
+
+These checks are deterministic and read the same artifacts you author — no hidden
+graph store (ADR-016). An agent over MCP can read the repository's overall
+validation status from `get_summary` (the `validation_status` block), without a
+fifth tool.
 
 ## Repository consistency
 

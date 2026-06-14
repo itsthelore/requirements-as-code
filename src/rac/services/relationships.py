@@ -25,6 +25,7 @@ from rac.core.corpus import CorpusEntry, walk_corpus
 from rac.core.identity import artifact_identifier, artifact_identifiers
 from rac.core.markdown import parse_file
 from rac.core.models import Product
+from rac.core.relationship_types import REGISTRY, edge_spec
 
 # The cross-artifact "Related X" sections. These populate the ``relationships``
 # dict in ``rac inspect`` output. ``related designs`` is included so every peer
@@ -312,26 +313,33 @@ ISSUE_SELF_REFERENCE = "relationship-self-reference"
 # Edge-legality (v0.14.0, ADR-049): a relationship section the artifact's type
 # does not declare produces no edge and is reported, not silently dropped.
 ISSUE_EDGE_UNSUPPORTED = "relationship-edge-unsupported"
-# Status-consistency (v0.14.1, ADR-049): a live artifact references a decision the
-# team has retired (Superseded/Deprecated), other than via ``supersedes``.
+# Status-consistency (v0.14.1, ADR-049; generalised in v0.16.0/ADR-051): a live
+# artifact references a target the team has retired, other than via ``supersedes``.
 ISSUE_TARGET_SUPERSEDED = "relationship-target-superseded"
+# Range (v0.16.0, ADR-055): a resolved target whose type is not in the edge's range
+# (e.g. a ``## Related Decisions`` reference that resolves to a requirement).
+ISSUE_TARGET_TYPE_MISMATCH = "relationship-target-type-mismatch"
+# Acyclicity (v0.16.0, ADR-055): a cycle in a directional, acyclic edge kind
+# (``supersedes``), which an ordering/replacement relationship must not contain.
+ISSUE_RELATIONSHIP_CYCLE = "relationship-cycle"
 
-# Decision statuses that mark an artifact as retired (no longer live). Matched
-# case-insensitively against the first line of a decision's ``## Status`` — the
-# same first-line rule ``rac inspect`` uses, inlined to avoid importing
-# ``inspect`` (which imports this module).
-_RETIRED_STATUSES = ("superseded", "deprecated")
 
+def _is_retired_artifact(product: Product, spec: ArtifactSpec | None) -> bool:
+    """True when ``product``'s ``## Status`` is one of its type's retired states.
 
-def _is_retired_decision(product: Product, spec: ArtifactSpec | None) -> bool:
-    """True when ``product`` is a decision whose status is Superseded/Deprecated."""
-    if spec is None or spec.name != "decision":
+    Spec-driven (ADR-051): reads ``spec.retired_status`` rather than a hard-coded
+    set, so every type's retired states are honoured. Matches case-insensitively
+    against the first non-empty status line — the same first-line rule
+    ``rac inspect`` uses, inlined to avoid importing ``inspect`` (which imports
+    this module).
+    """
+    if spec is None or not spec.retired_status:
         return False
     body = product.sections.get("status")
     if not body:
         return False
     first = next((line.strip() for line in body.splitlines() if line.strip()), "")
-    return first.casefold() in _RETIRED_STATUSES
+    return any(first.casefold() == s.casefold() for s in spec.retired_status)
 
 
 @dataclass
@@ -361,6 +369,12 @@ class RelationshipIssue:
             return {
                 "source_path": self.source_path,
                 "relationship": self.relationship,
+                "code": self.code,
+            }
+        if self.code == ISSUE_RELATIONSHIP_CYCLE:
+            return {
+                "relationship": self.relationship,
+                "paths": self.paths,
                 "code": self.code,
             }
         return {
@@ -492,6 +506,89 @@ def _resolve_references(
     return checked, issues, resolved_targets
 
 
+def _acyclic_adjacency(
+    items: list[tuple[str, Product, ArtifactSpec | None]],
+    resolution_index: _IdentIndex,
+    kind: str,
+) -> dict[str, list[str]]:
+    """``{source_path -> sorted unique target paths}`` for edge ``kind``.
+
+    Only uniquely-resolved, non-self edges contribute (self/ambiguous/unresolved
+    are owned by referential integrity), so the graph reflects real directed edges.
+    """
+    adjacency: dict[str, list[str]] = {}
+    for path, product, spec in items:
+        if spec is None:
+            continue
+        targets: set[str] = set()
+        for ref in extract_relationships_full(product, spec).get(kind, []):
+            resolved = [p for p, _ in resolution_index.get(ref.casefold(), [])]
+            if len(resolved) == 1 and resolved[0] != path:
+                targets.add(resolved[0])
+        if targets:
+            adjacency[path] = sorted(targets)
+    return adjacency
+
+
+def _cyclic_components(adjacency: dict[str, list[str]]) -> list[list[str]]:
+    """Strongly-connected components of size > 1, each a sorted node list.
+
+    A cycle exists exactly within an SCC larger than one node (self-loops are
+    already excluded upstream). Deterministic: nodes and neighbours are visited in
+    sorted order (Tarjan), and the components are returned sorted.
+    """
+    indices: dict[str, int] = {}
+    lowlink: dict[str, int] = {}
+    on_stack: set[str] = set()
+    stack: list[str] = []
+    counter = [0]
+    components: list[list[str]] = []
+
+    nodes = sorted(set(adjacency) | {t for ts in adjacency.values() for t in ts})
+
+    def strongconnect(v: str) -> None:
+        indices[v] = lowlink[v] = counter[0]
+        counter[0] += 1
+        stack.append(v)
+        on_stack.add(v)
+        for w in adjacency.get(v, []):
+            if w not in indices:
+                strongconnect(w)
+                lowlink[v] = min(lowlink[v], lowlink[w])
+            elif w in on_stack:
+                lowlink[v] = min(lowlink[v], indices[w])
+        if lowlink[v] == indices[v]:
+            component: list[str] = []
+            while True:
+                w = stack.pop()
+                on_stack.discard(w)
+                component.append(w)
+                if w == v:
+                    break
+            if len(component) > 1:
+                components.append(sorted(component))
+
+    for node in nodes:
+        if node not in indices:
+            strongconnect(node)
+    return sorted(components, key=lambda c: c[0])
+
+
+def _cycle_issues(
+    items: list[tuple[str, Product, ArtifactSpec | None]],
+    resolution_index: _IdentIndex,
+) -> list[RelationshipIssue]:
+    """One ``relationship-cycle`` per cyclic component of each acyclic edge kind."""
+    issues: list[RelationshipIssue] = []
+    for kind in sorted(name for name, edge in REGISTRY.items() if edge.acyclic):
+        adjacency = _acyclic_adjacency(items, resolution_index, kind)
+        for component in _cyclic_components(adjacency):
+            issues.append(
+                RelationshipIssue(code=ISSUE_RELATIONSHIP_CYCLE, relationship=kind, paths=component)
+            )
+    return issues
+
+
 def _validate(
     directory: str,
     items: list[tuple[str, Product, ArtifactSpec | None]],
@@ -526,24 +623,63 @@ def _validate(
             )
 
     resolution_index = _build_resolution_index(items)
-
-    # Status-consistency (v0.14.1, ADR-049): a live artifact must not reference a
-    # retired (Superseded/Deprecated) decision, except via ``supersedes``. Reads
-    # the resolved target's status from the materialised items — no second walk,
-    # no change to _resolve_references (which feeds portfolio accounting).
     by_path = {path: (product, spec) for path, product, spec in items}
+
+    def _resolved(ref: str, source_path: str) -> str | None:
+        """The unique non-self target path for ``ref``, or None.
+
+        Unresolved/ambiguous/self references are owned by referential integrity;
+        the graph checks below only reason about uniquely-resolved edges.
+        """
+        targets = [p for p, _ in resolution_index.get(ref.casefold(), [])]
+        if len(targets) != 1 or targets[0] == source_path:
+            return None
+        return targets[0]
+
+    # Range (v0.16.0, ADR-055): a resolved target whose type is not in the edge's
+    # declared range is an illegal edge — e.g. a ``## Related Decisions`` reference
+    # that resolves to a requirement. Deterministic (sorted-path / spec.optional).
     for path, product, spec in items:
-        if spec is None or _is_retired_decision(product, spec):
+        if spec is None:
+            continue
+        for section, refs in extract_relationships_full(product, spec).items():
+            edge = edge_spec(section)
+            if edge is None:
+                continue
+            for ref in refs:
+                target = _resolved(ref, path)
+                if target is None:
+                    continue
+                _, target_spec = by_path[target]
+                if target_spec is None:
+                    continue  # untyped document (ADR-010) — not a range violation
+                if target_spec.name not in edge.range:
+                    issues.append(
+                        RelationshipIssue(
+                            code=ISSUE_TARGET_TYPE_MISMATCH,
+                            source_path=path,
+                            relationship=section,
+                            target=ref,
+                        )
+                    )
+
+    # Status-consistency (v0.14.1, generalised in v0.16.0/ADR-051): a live artifact
+    # must not reference a retired target, except via an edge that permits it
+    # (``supersedes``, ``forbids_target_status=False``). Reads the resolved
+    # target's status from the materialised items — no second walk.
+    for path, product, spec in items:
+        if spec is None or _is_retired_artifact(product, spec):
             continue  # unknown file, or a retired source (historical chains exempt)
         for section, refs in extract_relationships_full(product, spec).items():
-            if section == "supersedes":
-                continue  # the replacing decision legitimately points at the retired one
+            edge = edge_spec(section)
+            if edge is None or not edge.forbids_target_status:
+                continue  # supersedes legitimately points at the retired one
             for ref in refs:
-                targets = [p for p, _ in resolution_index.get(ref.casefold(), [])]
-                if len(targets) != 1 or targets[0] == path:
-                    continue  # unresolved/ambiguous/self — referential integrity owns it
-                target_product, target_spec = by_path[targets[0]]
-                if _is_retired_decision(target_product, target_spec):
+                target = _resolved(ref, path)
+                if target is None:
+                    continue
+                target_product, target_spec = by_path[target]
+                if _is_retired_artifact(target_product, target_spec):
                     issues.append(
                         RelationshipIssue(
                             code=ISSUE_TARGET_SUPERSEDED,
@@ -552,6 +688,11 @@ def _validate(
                             target=ref,
                         )
                     )
+
+    # Acyclicity (v0.16.0, ADR-055): a cycle in a directional, acyclic edge kind
+    # (today ``supersedes``) is illegal — an ordering/replacement edge must not
+    # form a loop. Reported per strongly-connected component, deterministically.
+    issues.extend(_cycle_issues(items, resolution_index))
 
     checked, ref_issues, _ = _resolve_references(items, resolution_index)
     issues.extend(ref_issues)

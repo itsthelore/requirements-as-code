@@ -38,10 +38,12 @@ from rac.services.quickstart import QuickstartResult
 from rac.services.relationships import (
     ISSUE_DUPLICATE_IDENTIFIER,
     ISSUE_EDGE_UNSUPPORTED,
+    ISSUE_RELATIONSHIP_CYCLE,
     ISSUE_SELF_REFERENCE,
     ISSUE_TARGET_AMBIGUOUS,
     ISSUE_TARGET_NOT_FOUND,
     ISSUE_TARGET_SUPERSEDED,
+    ISSUE_TARGET_TYPE_MISMATCH,
     RelationshipReport,
     RelationshipValidation,
 )
@@ -594,6 +596,7 @@ _REF_ISSUE_SUFFIX = {
     ISSUE_TARGET_AMBIGUOUS: "ambiguous",
     ISSUE_SELF_REFERENCE: "self-reference",
     ISSUE_TARGET_SUPERSEDED: "superseded",
+    ISSUE_TARGET_TYPE_MISMATCH: "wrong target type",
 }
 
 
@@ -607,10 +610,12 @@ def render_relationship_validation_human(report: RelationshipValidation) -> str:
 
     duplicates = [i for i in report.issues if i.code == ISSUE_DUPLICATE_IDENTIFIER]
     unsupported = [i for i in report.issues if i.code == ISSUE_EDGE_UNSUPPORTED]
+    cycles = [i for i in report.issues if i.code == ISSUE_RELATIONSHIP_CYCLE]
     references = [
         i
         for i in report.issues
-        if i.code not in (ISSUE_DUPLICATE_IDENTIFIER, ISSUE_EDGE_UNSUPPORTED)
+        if i.code
+        not in (ISSUE_DUPLICATE_IDENTIFIER, ISSUE_EDGE_UNSUPPORTED, ISSUE_RELATIONSHIP_CYCLE)
     ]
 
     if duplicates:
@@ -629,6 +634,13 @@ def render_relationship_validation_human(report: RelationshipValidation) -> str:
                 lines += ["", issue.source_path or "<input>"]
             label = _relationship_label(issue.relationship or "")
             lines.append(_red(f"  ✗ {label} not supported for this artifact type"))
+
+    if cycles:
+        lines += ["", _bold("Relationship Cycles")]
+        for issue in cycles:
+            label = _relationship_label(issue.relationship or "")
+            lines.append(_red(f"✗ {label} cycle:"))
+            lines.extend(f"  - {p}" for p in issue.paths or [])
 
     if references:
         lines += ["", _bold("Broken Relationships")]
