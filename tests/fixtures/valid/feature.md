@@ -6,8 +6,8 @@ Users cannot narrow large result sets, so they abandon search.
 
 ## Requirements
 
-[REQ-001] User can filter results by category
-[REQ-002] User can combine multiple filters at once
+[REQ-001] The system SHALL let users filter results by category.
+[REQ-002] The system SHALL let users combine multiple active filters.
 
 ## Success Metrics
 
