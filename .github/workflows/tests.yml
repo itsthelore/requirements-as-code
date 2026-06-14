@@ -101,6 +101,8 @@ jobs:
             paths: "tests/test_review.py"
           - name: revisions
             paths: "tests/test_revisions.py"
+          - name: recency
+            paths: "tests/test_recency.py"
           - name: skill
             paths: "tests/test_skill.py"
           - name: stats
