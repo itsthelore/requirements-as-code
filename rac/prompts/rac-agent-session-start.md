@@ -12,6 +12,12 @@ Core principles:
 - Prefer schema/artifact-spec-driven behavior over artifact-specific branches.
 - Keep classification separate from validation.
 - Invalid but recognizable artifacts may still classify as their artifact type, then fail validation.
+- Durable thinking lives in the corpus, not in ephemeral tool scratch space.
+  Record plans, designs, and decisions as RAC artifacts under `rac/` — a
+  Design for the *how*, a Roadmap for the *what/why* (a non-versioned
+  `rac/roadmaps/future/` item when unscheduled), an ADR for a decision —
+  where the gates validate them. A tool's plan or scratch file is working
+  memory only; it has no authority and does not persist.
 
 Before coding:
 1. Refresh from `origin/main` unless told otherwise.
