@@ -495,7 +495,8 @@ def cmd_export(args: argparse.Namespace) -> int:
     # OKF bundle (ADR-048): a derived tree of Markdown files written to a
     # directory, parallel to the JSON/HTML views. Recency feeds log.md (ADR-045).
     if args.okf:
-        bundle = outputs.render_okf_bundle(export, artifact_recency(args.directory), args.directory)
+        recency = artifact_recency(args.directory, with_creation=True)
+        bundle = outputs.render_okf_bundle(export, recency, args.directory)
         out = args.out if args.out is not None else "okf-bundle"
         try:
             for rel, content in sorted(bundle.items()):

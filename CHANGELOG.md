@@ -8,6 +8,15 @@ details, release history over commit history.
 
 ### Added
 
+- OKF frontmatter superset (v0.15.0): RAC artifacts may now declare an optional
+  `tags: [...]` list (the OKF-reserved descriptive field ADR-025 anticipated),
+  validated for shape and additive — no `schema_version` bump. `rac export --okf`
+  carries `tags` from source plus `created`/`updated` derived from git history
+  (first and last commit) in each bundle artifact, so the OKF bundle is
+  timestamped while the source stays date-free (recency is git-derived, ADR-045).
+  RAC deliberately does not add frontmatter `title`/`description` or make `type`
+  mandatory (ADR-050). The JSON export contract is unchanged.
+
 - Status-consistency validation (v0.14.1): `rac relationships --validate` now
   reports a relationship from a live artifact to a decision the team has retired
   (`Superseded` or `Deprecated`) as `relationship-target-superseded` — so nothing

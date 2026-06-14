@@ -60,16 +60,26 @@ def _body(path: str) -> str:
     return split_frontmatter(text).body.strip()
 
 
-def _artifact_file(art: ExportArtifact, citations: list[tuple[str, str]]) -> str:
-    """One OKF artifact file: projected front matter, body, derived citations."""
-    lines = [
-        "---",
-        f"type: {OKF_TYPE[art.type]}",
-        f"id: {art.id}",
-        "---",
-        "",
-        _body(art.path),
-    ]
+def _artifact_file(
+    art: ExportArtifact,
+    citations: list[tuple[str, str]],
+    created: str | None,
+    updated: str | None,
+) -> str:
+    """One OKF artifact file: projected front matter, body, derived citations.
+
+    OKF-reserved descriptive fields (ADR-050), projected present-only so the
+    bundle stays minimal and deterministic: ``tags`` from the source frontmatter,
+    ``created``/``updated`` derived from git (never stored in source, ADR-045).
+    """
+    front = ["---", f"type: {OKF_TYPE[art.type]}", f"id: {art.id}"]
+    if created is not None:
+        front.append(f"created: {created}")
+    if updated is not None:
+        front.append(f"updated: {updated}")
+    if art.tags:
+        front.append(f"tags: [{', '.join(art.tags)}]")
+    lines = [*front, "---", "", _body(art.path)]
     if citations:
         lines += ["", "# Citations", ""]
         lines += [f"- [{title}]({path})" for title, path in citations]
@@ -151,12 +161,16 @@ def render_okf_bundle(export: CorpusExport, recency: RecencyReport, root: str) -
     """
     rel = {art.path: os.path.relpath(art.path, root) for art in export.artifacts}
     by_id = {art.id: art for art in export.artifacts}
+    recency_by_path = {a.path: a for a in recency.artifacts}
     files: dict[str, str] = {}
     for art in export.artifacts:
         key = rel[art.path]
         if key in (_INDEX_PATH, _LOG_PATH):
             raise ValueError(f"artifact path {key!r} collides with a generated bundle file")
-        files[key] = _artifact_file(art, _citations(art, export, by_id, rel))
+        record = recency_by_path.get(art.path)
+        created = record.first_committed.isoformat() if record and record.first_committed else None
+        updated = record.last_committed.isoformat() if record and record.last_committed else None
+        files[key] = _artifact_file(art, _citations(art, export, by_id, rel), created, updated)
     files[_INDEX_PATH] = _index(export, rel)
     files[_LOG_PATH] = _log(export, recency, rel)
     return files

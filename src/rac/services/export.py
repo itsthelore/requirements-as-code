@@ -73,6 +73,10 @@ class ExportArtifact:
     title: str
     path: str
     body_html: str
+    # OKF-reserved descriptive labels (ADR-050). Carried for the OKF bundle
+    # projection; deliberately *not* in ``to_dict`` — the JSON contract (ADR-007)
+    # is unchanged until a versioned addition is decided.
+    tags: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -183,6 +187,7 @@ def build_corpus_export(directory: str, recursive: bool = True) -> CorpusExport:
         canonical_by_path[path] = canonical
         if spec is None:
             continue  # unknown files are not exported
+        meta = entry.product.metadata
         artifacts.append(
             ExportArtifact(
                 id=canonical,
@@ -192,6 +197,7 @@ def build_corpus_export(directory: str, recursive: bool = True) -> CorpusExport:
                 title=entry.product.title or canonical,
                 path=path,
                 body_html=_render_body(path, md),
+                tags=meta.tags if meta else [],
             )
         )
 
