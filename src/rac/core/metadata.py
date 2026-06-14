@@ -53,4 +53,8 @@ class ArtifactMetadata:
     id: str | None = None
     type: str | None = None
     relationships: dict[str, list[str]] = field(default_factory=dict)
+    # OKF-reserved descriptive labels (ADR-050): optional, additive, never a
+    # source of product reasoning. ADR-025 reserved ``tags``. Timestamps stay out
+    # of frontmatter — recency is git-derived (ADR-045).
+    tags: list[str] = field(default_factory=list)
     provenance: str = PROVENANCE_FRONTMATTER

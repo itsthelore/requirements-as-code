@@ -32,8 +32,11 @@ _DELIMITER = "---"
 _CLOSERS = ("---", "...")
 
 # The complete frontmatter field schema. One canonical location per field
-# (ADR-025): anything else is invalid-metadata-field, not ignored.
-_SUPPORTED_FIELDS = ("schema_version", "id", "type", "relationships")
+# (ADR-025): anything else is invalid-metadata-field, not ignored. ``tags`` is
+# the OKF-reserved descriptive field ADR-025 reserved and ADR-050 adopts —
+# optional, additive, validated for shape only. Timestamps are deliberately
+# absent: recency is git-derived, never stored in frontmatter (ADR-045).
+_SUPPORTED_FIELDS = ("schema_version", "id", "type", "relationships", "tags")
 
 
 class _StrictLoader(yaml.SafeLoader):
@@ -211,10 +214,29 @@ def parse_frontmatter(raw: str) -> tuple[ArtifactMetadata | None, list[Issue]]:
                 kind: [normalize_id(t) for t in targets] for kind, targets in relationships.items()
             }
 
+    tags = _parse_tags(data, issues)
+
     metadata = ArtifactMetadata(
         schema_version=schema_version if isinstance(schema_version, int) else 0,
         id=artifact_id,
         type=artifact_type,
         relationships=parsed_relationships,
+        tags=tags,
     )
     return metadata, issues
+
+
+def _parse_tags(data: dict, issues: list[Issue]) -> list[str]:
+    """Validate the optional ``tags`` field — a list of non-empty strings."""
+    tags = data.get("tags")
+    if tags is None:
+        return []
+    if not isinstance(tags, list) or not all(isinstance(t, str) and t.strip() for t in tags):
+        issues.append(
+            _issue(
+                "invalid-metadata-field",
+                "frontmatter field 'tags' must be a list of non-empty strings",
+            )
+        )
+        return []
+    return [t.strip() for t in tags]
