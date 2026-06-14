@@ -210,3 +210,7 @@ one quarter after release if no user has opted in.
 ## Related Roadmaps
 
 - agent-usage-readback
+
+## Related Designs
+
+- agent-usage-surface

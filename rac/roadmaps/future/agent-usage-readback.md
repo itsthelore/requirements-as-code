@@ -148,3 +148,7 @@ string-only, user-submits flow.
 
 - rac-trust-transparency
 - rac-agent-context-guide
+
+## Related Designs
+
+- agent-usage-surface
