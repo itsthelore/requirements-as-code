@@ -203,3 +203,34 @@ def test_validation_surfaces_unterminated_frontmatter():
     text = "---\nschema_version: 1\n# T\n\n## Problem\n\np\n\n## Requirements\n\n[REQ-001] x\n"
     issues = validate(parse(text))
     assert "malformed-frontmatter" in [i.code for i in issues]
+
+
+# --- tags (OKF-reserved descriptive field, ADR-050) -------------------------
+
+
+def test_parse_tags_accepted():
+    md, issues = parse_frontmatter("schema_version: 1\ntype: decision\ntags: [okf, interop]")
+    assert _codes(issues) == []
+    assert md.tags == ["okf", "interop"]
+
+
+def test_parse_tags_absent_is_empty():
+    md, issues = parse_frontmatter("schema_version: 1\ntype: decision")
+    assert _codes(issues) == []
+    assert md.tags == []
+
+
+def test_parse_tags_must_be_list_of_nonempty_strings():
+    _, issues = parse_frontmatter("schema_version: 1\ntags: [okf, '']")
+    assert "invalid-metadata-field" in _codes(issues)
+
+
+def test_parse_tags_rejects_scalar():
+    _, issues = parse_frontmatter("schema_version: 1\ntags: okf")
+    assert "invalid-metadata-field" in _codes(issues)
+
+
+def test_timestamps_are_not_supported_frontmatter():
+    # Recency is git-derived (ADR-045); created/updated are not frontmatter fields.
+    _, issues = parse_frontmatter("schema_version: 1\ncreated: 2026-06-14")
+    assert "invalid-metadata-field" in _codes(issues)

@@ -78,8 +78,52 @@ def test_artifact_file_projects_okf_front_matter():
     export = _export()
     bundle = _bundle(export, _recency(export))
     for art in export.artifacts:
-        head = bundle[_key(art)].splitlines()[:4]
-        assert head == ["---", f"type: {OKF_TYPE[art.type]}", f"id: {art.id}", "---"]
+        lines = bundle[_key(art)].splitlines()
+        assert lines[0] == "---"
+        front = lines[1 : lines.index("---", 1)]
+        assert f"type: {OKF_TYPE[art.type]}" in front
+        assert f"id: {art.id}" in front
+        # _recency supplies a last-commit time, so `updated` is projected.
+        assert any(line.startswith("updated: ") for line in front)
+
+
+def test_created_and_updated_projected_from_git_recency():
+    export = _export()
+    recency = RecencyReport(
+        directory="export",
+        recursive=True,
+        artifacts=[
+            ArtifactRecency(
+                path=a.path,
+                artifact_type=a.type,
+                last_committed=datetime(2026, 6, 14, tzinfo=UTC),
+                first_committed=datetime(2026, 1, 1, tzinfo=UTC),
+            )
+            for a in export.artifacts
+        ],
+    )
+    front = render_okf_bundle(export, recency, _ROOT)[_key(export.artifacts[0])]
+    assert "created: 2026-01-01T00:00:00+00:00" in front
+    assert "updated: 2026-06-14T00:00:00+00:00" in front
+
+
+def test_tags_projected_from_source(tmp_path):
+    (tmp_path / "adr-001.md").write_text(
+        "---\nschema_version: 1\ntype: decision\ntags: [okf, interop]\n---\n"
+        "# A\n\n## Context\nc\n\n## Decision\nd\n\n## Consequences\nq\n",
+        encoding="utf-8",
+    )
+    export = build_corpus_export(str(tmp_path))
+    recency = RecencyReport(
+        directory=str(tmp_path),
+        recursive=True,
+        artifacts=[
+            ArtifactRecency(path=a.path, artifact_type=a.type, last_committed=None)
+            for a in export.artifacts
+        ],
+    )
+    bundle = render_okf_bundle(export, recency, str(tmp_path))
+    assert "tags: [okf, interop]" in bundle["adr-001.md"]
 
 
 def test_resolved_relationship_renders_as_citation_link():
