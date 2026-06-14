@@ -67,6 +67,33 @@ type: decision
 presents, in the OKF bundle view, as `type: ADR` — the same file, the same body,
 a derived front-matter projection.
 
+## Checking conformance (write-time gate)
+
+Conformance is enforced, not just produced on export. Running `rac validate` over
+a corpus checks OKF v0.1 conformance as part of the run (ADR-048, ADR-049):
+
+```bash
+rac validate rac/
+# … PASS  rac/ — N artifact(s) checked: N valid, 0 invalid. OKF v0.1: conformant.
+```
+
+The check is deterministic and per-artifact. It reports, with a file-named,
+fixable diagnostic, and fails the `validate` exit code:
+
+| Code | Meaning |
+| --- | --- |
+| `okf-unmapped-type` | a typed artifact whose `type` has no OKF mapping (it would be silently dropped from the bundle) |
+| `okf-reserved-filename-collision` | a typed artifact named `index.md` or `log.md`, which OKF reserves for generated entry points |
+
+Untyped documents are excluded (ADR-010): they are legitimately skipped and the
+bundle already omits them, so an `index.md`/`log.md` that is an untyped entry
+point is recognized, never flagged. Referential integrity ("links resolve") stays
+with `rac relationships --validate`. The directory `validate` JSON carries an
+additive `okf` section (ADR-007). Per ADR-052, `rac-core` — the OKF-superset
+frontmatter envelope (`schema_version`, `id`, `type`, `relationships`, `tags`) —
+is defined in code and enforced this way; RAC ships no JSON Schema `rac-core` file
+and takes no schema-validation dependency.
+
 ## Conventions (recommended)
 
 Where RAC has gaps, a RAC repository SHOULD adopt the following OKF conventions.

@@ -8,6 +8,15 @@ details, release history over commit history.
 
 ### Added
 
+- OKF v0.1 conformance check (v0.15.1): `rac validate <dir>` now enforces OKF
+  conformance as a write-time gate, not just on export. It reports, per typed
+  artifact, `okf-unmapped-type` (a `type` with no OKF mapping) and
+  `okf-reserved-filename-collision` (a typed artifact named `index.md`/`log.md`),
+  and fails the run when the corpus could not produce a conformant bundle. Untyped
+  documents are excluded (ADR-010); the directory `validate` JSON gains an additive
+  `okf` section (no `schema_version` bump). Per ADR-052, `rac-core` stays the
+  code-defined OKF-superset envelope — no JSON Schema files, no new dependency.
+
 - OKF frontmatter superset (v0.15.0): RAC artifacts may now declare an optional
   `tags: [...]` list (the OKF-reserved descriptive field ADR-025 anticipated),
   validated for shape and additive — no `schema_version` bump. `rac export --okf`
