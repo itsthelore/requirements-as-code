@@ -8,6 +8,14 @@ details, release history over commit history.
 
 ### Added
 
+- Status-consistency validation (v0.14.1): `rac relationships --validate` now
+  reports a relationship from a live artifact to a decision the team has retired
+  (`Superseded` or `Deprecated`) as `relationship-target-superseded` — so nothing
+  live points at a superseded artifact. The `supersedes` edge by which a replacing
+  decision references the one it replaces is exempt, as is a reference from a
+  retired decision (historical chains). Decision-only for now, since lifecycle
+  status lives on decisions. Existing issue codes are unchanged.
+
 - Edge-legality validation (v0.14.0): `rac relationships --validate` now reports a
   `## Related <Type>` (or `## Supersedes`) section that the artifact's type does
   not support, instead of silently dropping it. Such a section produces no graph

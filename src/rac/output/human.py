@@ -41,6 +41,7 @@ from rac.services.relationships import (
     ISSUE_SELF_REFERENCE,
     ISSUE_TARGET_AMBIGUOUS,
     ISSUE_TARGET_NOT_FOUND,
+    ISSUE_TARGET_SUPERSEDED,
     RelationshipReport,
     RelationshipValidation,
 )
@@ -570,11 +571,12 @@ def render_relationships_human(report: RelationshipReport) -> str:
 
 # --- relationship validation -------------------------------------------------
 
-# Suffix shown after a broken reference, per issue code.
+# Suffix shown after a flagged reference, per issue code.
 _REF_ISSUE_SUFFIX = {
     ISSUE_TARGET_NOT_FOUND: "not found",
     ISSUE_TARGET_AMBIGUOUS: "ambiguous",
     ISSUE_SELF_REFERENCE: "self-reference",
+    ISSUE_TARGET_SUPERSEDED: "superseded",
 }
 
 

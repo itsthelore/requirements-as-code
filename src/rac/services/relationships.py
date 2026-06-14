@@ -312,6 +312,26 @@ ISSUE_SELF_REFERENCE = "relationship-self-reference"
 # Edge-legality (v0.14.0, ADR-049): a relationship section the artifact's type
 # does not declare produces no edge and is reported, not silently dropped.
 ISSUE_EDGE_UNSUPPORTED = "relationship-edge-unsupported"
+# Status-consistency (v0.14.1, ADR-049): a live artifact references a decision the
+# team has retired (Superseded/Deprecated), other than via ``supersedes``.
+ISSUE_TARGET_SUPERSEDED = "relationship-target-superseded"
+
+# Decision statuses that mark an artifact as retired (no longer live). Matched
+# case-insensitively against the first line of a decision's ``## Status`` — the
+# same first-line rule ``rac inspect`` uses, inlined to avoid importing
+# ``inspect`` (which imports this module).
+_RETIRED_STATUSES = ("superseded", "deprecated")
+
+
+def _is_retired_decision(product: Product, spec: ArtifactSpec | None) -> bool:
+    """True when ``product`` is a decision whose status is Superseded/Deprecated."""
+    if spec is None or spec.name != "decision":
+        return False
+    body = product.sections.get("status")
+    if not body:
+        return False
+    first = next((line.strip() for line in body.splitlines() if line.strip()), "")
+    return first.casefold() in _RETIRED_STATUSES
 
 
 @dataclass
@@ -505,7 +525,35 @@ def _validate(
                 )
             )
 
-    checked, ref_issues, _ = _resolve_references(items, _build_resolution_index(items))
+    resolution_index = _build_resolution_index(items)
+
+    # Status-consistency (v0.14.1, ADR-049): a live artifact must not reference a
+    # retired (Superseded/Deprecated) decision, except via ``supersedes``. Reads
+    # the resolved target's status from the materialised items — no second walk,
+    # no change to _resolve_references (which feeds portfolio accounting).
+    by_path = {path: (product, spec) for path, product, spec in items}
+    for path, product, spec in items:
+        if spec is None or _is_retired_decision(product, spec):
+            continue  # unknown file, or a retired source (historical chains exempt)
+        for section, refs in extract_relationships_full(product, spec).items():
+            if section == "supersedes":
+                continue  # the replacing decision legitimately points at the retired one
+            for ref in refs:
+                targets = [p for p, _ in resolution_index.get(ref.casefold(), [])]
+                if len(targets) != 1 or targets[0] == path:
+                    continue  # unresolved/ambiguous/self — referential integrity owns it
+                target_product, target_spec = by_path[targets[0]]
+                if _is_retired_decision(target_product, target_spec):
+                    issues.append(
+                        RelationshipIssue(
+                            code=ISSUE_TARGET_SUPERSEDED,
+                            source_path=path,
+                            relationship=section,
+                            target=ref,
+                        )
+                    )
+
+    checked, ref_issues, _ = _resolve_references(items, resolution_index)
     issues.extend(ref_issues)
 
     return RelationshipValidation(
