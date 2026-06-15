@@ -12,14 +12,14 @@ Planned
 
 ## Context
 
-ADR-063 records the decision to adopt a small multi-repo topology under the
+ADR-064 records the decision to adopt a small multi-repo topology under the
 `itsthelore` organisation: extract the standalone components and keep the
 engine, its shipped resources, and its governing corpus in
 `itsthelore/requirements-as-code`. This programme sequences those extractions.
 It is a non-versioned `future/` item because the work is structural and
 cross-cutting, not a feature release on the current series.
 
-Two components extract; `examples/` is explicitly kept (ADR-063), since
+Two components extract; `examples/` is explicitly kept (ADR-064), since
 `examples/guide` is the grounding demo and the dashboards are test fixtures.
 The two extraction targets differ in risk. `decisiongrounding` imports no
 engine code and can move with no consumer impact. The GitHub Actions are the
@@ -65,7 +65,7 @@ validation action and moves with it.
 ### Initiative 3 — Keep `examples/`; adopt the per-repo examples convention
 
 `examples/` is **not** extracted. `examples/guide` is the grounding demo and
-the dashboards are test fixtures, so they stay in the engine repo (ADR-063).
+the dashboards are test fixtures, so they stay in the engine repo (ADR-064).
 The convention going forward: each repo carries its own `examples/`
 subdirectory where useful, rather than a central examples repository. The
 separately planned liftable SDK examples sub-project (v0.20.1) is unaffected by
@@ -85,8 +85,8 @@ this programme.
 ## Non-Goals
 
 - Extracting `examples/` or creating a `rac-examples` repo — examples stays in
-  the engine repo (ADR-063).
-- Extracting `lore-web` — deferred by ADR-063 until its Portal-shell vendoring
+  the engine repo (ADR-064).
+- Extracting `lore-web` — deferred by ADR-064 until its Portal-shell vendoring
   has a publish/vendor contract.
 - Renaming the package, CLI, or server.
 - Creating the org repositories as part of this corpus task; the repos are
@@ -164,7 +164,7 @@ and `pytest` passes.
 
 ## Related Decisions
 
-- adr-063
+- adr-064
 - adr-058
 
 ## Related Roadmaps

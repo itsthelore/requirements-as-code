@@ -4,7 +4,7 @@ id: RAC-KV68XJGEXBNB
 type: decision
 tags: [structure, org, packaging, distribution]
 ---
-# ADR-063: Multi-Repo Extraction Strategy for the itsthelore Organisation
+# ADR-064: Multi-Repo Extraction Strategy for the itsthelore Organisation
 
 ## Status
 
