@@ -34,6 +34,11 @@ def test_valid_status_passes_per_type():
     assert "invalid-design-status" not in codes(DESIGN.format(s="Superseded"))
 
 
+def test_roadmap_achieved_is_a_valid_terminal_status():
+    # ADR-061: Achieved is the live terminal state for a delivered roadmap.
+    assert "invalid-roadmap-status" not in codes(ROADMAP.format(s="Achieved"))
+
+
 def test_out_of_enum_status_fails_per_type():
     # roadmap has no Accepted; prompt has no Proposed — each is out of enum.
     assert "invalid-requirement-status" in codes(REQUIREMENT.format(s="Done"))

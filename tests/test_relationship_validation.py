@@ -376,6 +376,20 @@ def test_deprecated_target_is_reported(tmp_path):
     assert [i.code for i in report.issues] == [ISSUE_TARGET_SUPERSEDED]
 
 
+def test_reference_to_achieved_roadmap_is_not_retired(tmp_path):
+    # ADR-061: Achieved is a live terminal state (a delivered roadmap), so a
+    # live artifact may reference it without a retired-target finding.
+    (tmp_path / "v1.md").write_text(
+        _ROADMAP.format(t="One") + "\n## Status\n\nAchieved\n", encoding="utf-8"
+    )
+    (tmp_path / "adr-001.md").write_text(
+        _decision("Live", "Accepted", "\n## Related Roadmaps\n\n- v1\n"), encoding="utf-8"
+    )
+    report = validate_relationships(str(tmp_path))
+    assert report.ok
+    assert ISSUE_TARGET_SUPERSEDED not in [i.code for i in report.issues]
+
+
 def test_retired_source_reference_is_exempt(tmp_path):
     # A retired decision referencing another retired decision is a historical
     # chain, not live knowledge pointing at dead knowledge — not flagged.
