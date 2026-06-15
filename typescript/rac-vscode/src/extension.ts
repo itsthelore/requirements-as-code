@@ -10,10 +10,15 @@
  *    at the reference site, from `rac relationships --validate`;
  *  - authoring aids: artifact-ID completion in relationship sections, quick-fix
  *    insertion of missing sections, and a "New Artifact" command (`rac new`);
- *  - hover and go-to-definition on artifact IDs / aliases via `rac resolve`.
+ *  - navigation: status-aware hover, go-to-definition, find-all-references,
+ *    clickable alias links, an Outline, and workspace symbols;
+ *  - ambient awareness: a status-bar health score and workspace-wide diagnostics;
+ *  - the RAC Explorer webview (`rac export --html`).
  *
- * The file is organized into clearly delimited sections; a module split is
- * scoped for v0.21.6 (robustness/release).
+ * Robustness (v0.21.6): the extension activates only in RAC workspaces, caches
+ * resolve/export lookups (cleared on save), checks for rac schema-version skew,
+ * and logs to a dedicated "RAC" output channel. The file is organized into
+ * clearly delimited sections; a module split is a possible future cleanup.
  */
 
 import { readFile, rm } from "node:fs/promises";
@@ -33,6 +38,7 @@ import {
   type Issue,
   type RelationshipIssue,
   type RelationshipValidation,
+  type ResolveResult,
   type ResolvedArtifact,
 } from "@rac/sdk";
 
@@ -40,17 +46,22 @@ const DEBOUNCE_MS = 300;
 const RELATIONSHIP_DEBOUNCE_MS = 600;
 const AWARENESS_DEBOUNCE_MS = 800;
 const ARTIFACT_TYPES = ["requirement", "decision", "roadmap", "prompt", "design"];
+// The JSON schema_version this extension's typed contracts target (ADR-007).
+const EXPECTED_SCHEMA_VERSION = "1";
 
 let diagnostics: vscode.DiagnosticCollection;
 let relationshipDiagnostics: vscode.DiagnosticCollection;
 let workspaceDiagnostics: vscode.DiagnosticCollection;
 let statusBar: vscode.StatusBarItem;
+let output: vscode.OutputChannel;
 const clients = new Map<string, RacClient>();
 const exportCache = new Map<string, CorpusExport>();
+const resolveCache = new Map<string, ResolveResult>();
 const debounce = new Map<string, ReturnType<typeof setTimeout>>();
 const relationshipDebounce = new Map<string, ReturnType<typeof setTimeout>>();
 const awarenessDebounce = new Map<string, ReturnType<typeof setTimeout>>();
 let warnedMissing = false;
+let warnedSkew = false;
 
 export function activate(context: vscode.ExtensionContext): void {
   diagnostics = vscode.languages.createDiagnosticCollection("rac");
@@ -58,6 +69,7 @@ export function activate(context: vscode.ExtensionContext): void {
   workspaceDiagnostics = vscode.languages.createDiagnosticCollection("rac-workspace");
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
   statusBar.command = "workbench.actions.view.problems";
+  output = vscode.window.createOutputChannel("RAC");
   const selector: vscode.DocumentSelector = { language: "markdown", scheme: "file" };
 
   context.subscriptions.push(
@@ -65,6 +77,7 @@ export function activate(context: vscode.ExtensionContext): void {
     relationshipDiagnostics,
     workspaceDiagnostics,
     statusBar,
+    output,
     vscode.workspace.onDidOpenTextDocument((doc) => {
       void validateDocument(doc);
       // The live per-file collection owns open files; drop any workspace-scan
@@ -76,6 +89,7 @@ export function activate(context: vscode.ExtensionContext): void {
       scheduleRelationshipsFor(doc);
       scheduleAwarenessFor(doc);
       invalidateExportFor(doc);
+      resolveCache.clear();
     }),
     vscode.workspace.onDidChangeTextDocument((e) => scheduleValidate(e.document)),
     vscode.workspace.onDidCloseTextDocument((doc) => {
@@ -86,6 +100,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (e.affectsConfiguration("rac")) {
         clients.clear();
         exportCache.clear();
+        resolveCache.clear();
         void validateWorkspace();
         refreshAllRelationships();
         refreshAllAwareness();
@@ -113,6 +128,7 @@ export function activate(context: vscode.ExtensionContext): void {
   for (const doc of vscode.workspace.textDocuments) void validateDocument(doc);
   refreshAllRelationships();
   refreshAllAwareness();
+  checkAllSchemas();
 }
 
 export function deactivate(): void {
@@ -130,6 +146,7 @@ export function deactivate(): void {
   workspaceDiagnostics?.dispose();
   statusBar?.dispose();
   explorerPanel?.dispose();
+  resolveCache.clear();
 }
 
 // --- per-file validation ----------------------------------------------------
@@ -181,7 +198,7 @@ async function validateDocument(doc: vscode.TextDocument): Promise<void> {
       warnMissingOnce();
       return;
     }
-    console.error("RAC: validation failed", err);
+    log("validation failed", err);
   }
 }
 
@@ -273,7 +290,7 @@ async function refreshRelationships(folder: vscode.WorkspaceFolder): Promise<voi
     result = await clientFor(folder).validateRelationships(folder.uri.fsPath);
   } catch (err) {
     if (err instanceof RacNotFoundError) warnMissingOnce();
-    else console.error("RAC: relationship validation failed", err);
+    else log("relationship validation failed", err);
     return;
   }
 
@@ -403,7 +420,7 @@ async function refreshStatusBar(folder: vscode.WorkspaceFolder): Promise<void> {
       statusBar.hide();
       warnMissingOnce();
     } else {
-      console.error("RAC: review failed", err);
+      log("review failed", err);
     }
   }
 }
@@ -414,7 +431,7 @@ async function refreshWorkspaceDiagnostics(folder: vscode.WorkspaceFolder): Prom
     result = await clientFor(folder).validateDirectory(folder.uri.fsPath);
   } catch (err) {
     if (err instanceof RacNotFoundError) warnMissingOnce();
-    else console.error("RAC: directory validation failed", err);
+    else log("directory validation failed", err);
     return;
   }
 
@@ -690,9 +707,23 @@ async function resolveAt(
   const token = doc.getText(range);
   if (!looksLikeReference(token)) return undefined;
 
+  const result = await resolveToken(folder, token);
+  return result && isResolved(result) ? result : undefined;
+}
+
+// Resolve a token, memoized per folder (cleared on save). Caches not-found
+// results too, so repeated hovers over plain words don't re-spawn `rac`.
+async function resolveToken(
+  folder: vscode.WorkspaceFolder,
+  token: string,
+): Promise<ResolveResult | undefined> {
+  const key = `${folder.uri.fsPath}::${token}`;
+  const cached = resolveCache.get(key);
+  if (cached) return cached;
   try {
     const result = await clientFor(folder).resolve(token);
-    return isResolved(result) ? result : undefined;
+    resolveCache.set(key, result);
+    return result;
   } catch (err) {
     if (err instanceof RacNotFoundError) warnMissingOnce();
     return undefined;
@@ -951,6 +982,37 @@ const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
 function looksLikeRacArtifact(text: string): boolean {
   const match = FRONTMATTER.exec(text);
   return match !== null && /(^|\n)\s*schema_version\s*:/.test(match[1] ?? "");
+}
+
+// Version-skew check: a cheap `rac resolve` probe carries `schema_version`
+// regardless of outcome. Warn once if the installed rac speaks a contract this
+// extension wasn't built against.
+function checkAllSchemas(): void {
+  for (const folder of vscode.workspace.workspaceFolders ?? []) void checkSchema(folder);
+}
+
+async function checkSchema(folder: vscode.WorkspaceFolder): Promise<void> {
+  let result: ResolveResult;
+  try {
+    result = await clientFor(folder).resolve("__rac_schema_probe__");
+  } catch (err) {
+    if (err instanceof RacNotFoundError) warnMissingOnce();
+    return;
+  }
+  if (result.schema_version !== EXPECTED_SCHEMA_VERSION && !warnedSkew) {
+    warnedSkew = true;
+    void vscode.window.showWarningMessage(
+      `RAC: the installed rac reports schema_version ${result.schema_version}, but this ` +
+        `extension targets ${EXPECTED_SCHEMA_VERSION}. Some features may misbehave — ` +
+        "update rac or the extension so they match.",
+    );
+  }
+}
+
+function log(message: string, err?: unknown): void {
+  const detail =
+    err instanceof Error ? `: ${err.message}` : err !== undefined ? `: ${String(err)}` : "";
+  output.appendLine(`[${new Date().toISOString()}] ${message}${detail}`);
 }
 
 function warnMissingOnce(): void {
