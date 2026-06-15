@@ -345,6 +345,10 @@ async function provideCompletions(
   const corpus = await corpusExport(folder);
   if (!corpus) return undefined;
 
+  // Replace the whole hyphenated token under the cursor, so accepting "adr-007"
+  // after typing "adr-" produces "adr-007", not "adr-adr-007".
+  const replaceRange = doc.getWordRangeAtPosition(position, REFERENCE_WORD);
+
   const items: vscode.CompletionItem[] = [];
   for (const artifact of corpus.artifacts) {
     for (const alias of artifact.aliases) {
@@ -352,6 +356,7 @@ async function provideCompletions(
       const item = new vscode.CompletionItem(alias, vscode.CompletionItemKind.Reference);
       item.detail = `${artifact.type} — ${artifact.title}`;
       item.insertText = alias;
+      if (replaceRange) item.range = replaceRange;
       items.push(item);
     }
   }
@@ -366,6 +371,25 @@ function provideCodeActions(
   const actions: vscode.CodeAction[] = [];
   for (const diagnostic of context.diagnostics) {
     if (diagnostic.source !== "rac" || typeof diagnostic.code !== "string") continue;
+
+    if (diagnostic.code === "missing-title") {
+      // A title is a top-level `# ` heading, not a `## ` section — insert it
+      // after any frontmatter rather than appending a bogus "## Title" section
+      // (which would not clear the finding).
+      const action = new vscode.CodeAction(
+        "Insert title heading",
+        vscode.CodeActionKind.QuickFix,
+      );
+      action.diagnostics = [diagnostic];
+      const edit = new vscode.WorkspaceEdit();
+      edit.insert(doc.uri, titleInsertPosition(doc), "# Title\n\n");
+      action.edit = edit;
+      actions.push(action);
+      continue;
+    }
+
+    // The remaining missing-<section> codes (problem, requirements, risks,
+    // success-metrics) are genuine `## ` sections.
     const match = /^missing-(.+)$/.exec(diagnostic.code);
     if (!match) continue;
     const title = titleCase(match[1].replace(/-/g, " "));
@@ -377,15 +401,26 @@ function provideCodeActions(
     const edit = new vscode.WorkspaceEdit();
     const text = doc.getText();
     const separator = text.endsWith("\n") ? "\n" : "\n\n";
-    edit.insert(
-      doc.uri,
-      new vscode.Position(doc.lineCount, 0),
-      `${separator}## ${title}\n\n`,
-    );
+    edit.insert(doc.uri, endOfDocument(doc), `${separator}## ${title}\n\n`);
     action.edit = edit;
     actions.push(action);
   }
   return actions;
+}
+
+// A title goes immediately after the YAML frontmatter block, else at the top.
+function titleInsertPosition(doc: vscode.TextDocument): vscode.Position {
+  const lines = doc.getText().split(/\r?\n/);
+  if (lines[0] === "---") {
+    for (let i = 1; i < lines.length; i++) {
+      if (lines[i] === "---") return new vscode.Position(i + 1, 0);
+    }
+  }
+  return new vscode.Position(0, 0);
+}
+
+function endOfDocument(doc: vscode.TextDocument): vscode.Position {
+  return doc.lineAt(doc.lineCount - 1).range.end;
 }
 
 async function newArtifact(): Promise<void> {
