@@ -586,7 +586,7 @@ async function provideReferences(
   for (const sourceId of sourceIds) {
     const source = index.byId.get(sourceId);
     if (!source) continue;
-    const uri = vscode.Uri.joinPath(folder.uri, source.path);
+    const uri = artifactUri(folder, source.path);
     try {
       const srcDoc = await vscode.workspace.openTextDocument(uri);
       locations.push(new vscode.Location(uri, firstAliasRange(srcDoc, targetAliases)));
@@ -617,7 +617,7 @@ async function provideDocumentLinks(
     const artifact = index.aliasToArtifact.get(token.toLowerCase());
     if (!artifact) continue;
     const range = new vscode.Range(doc.positionAt(m.index), doc.positionAt(m.index + token.length));
-    const link = new vscode.DocumentLink(range, vscode.Uri.joinPath(folder.uri, artifact.path));
+    const link = new vscode.DocumentLink(range, artifactUri(folder, artifact.path));
     link.tooltip = `${artifact.type} — ${artifact.title}`;
     links.push(link);
   }
@@ -658,7 +658,7 @@ async function provideWorkspaceSymbols(): Promise<vscode.SymbolInformation[]> {
     const corpus = await corpusExport(folder);
     if (!corpus) continue;
     for (const artifact of corpus.artifacts) {
-      const uri = vscode.Uri.joinPath(folder.uri, artifact.path);
+      const uri = artifactUri(folder, artifact.path);
       symbols.push(
         new vscode.SymbolInformation(
           artifact.title,
@@ -670,6 +670,15 @@ async function provideWorkspaceSymbols(): Promise<vscode.SymbolInformation[]> {
     }
   }
   return symbols;
+}
+
+// `rac export` returns absolute artifact paths when given an absolute directory
+// (the extension passes one), so build the Uri from the absolute path directly;
+// fall back to joining a relative path onto the workspace folder.
+function artifactUri(folder: vscode.WorkspaceFolder, artifactPath: string): vscode.Uri {
+  return path.isAbsolute(artifactPath)
+    ? vscode.Uri.file(artifactPath)
+    : vscode.Uri.joinPath(folder.uri, artifactPath);
 }
 
 interface CorpusIndex {
