@@ -8,6 +8,18 @@ details, release history over commit history.
 
 ### Added
 
+- Per-type standards enforcement (v0.17.1): `rac validate` now lints requirement
+  *quality* against the standards RAC cites — BCP-14 keyword discipline
+  (`requirement-normative-keyword`, error: only uppercase MUST/SHALL/SHOULD/MAY are
+  normative), ISO 29148 singularity (`requirement-not-singular`, warning), and EARS
+  (`requirement-non-ears` / `requirement-ears-clause`, warnings). Roadmaps gain an
+  optional, validated `## Horizon` (now/next/later or a quarter) and an
+  advancement-linkage warning. All checks are deterministic (no AI in core) and
+  overridable per the v0.15.2 model. Severity overrides are now **repository-wide**
+  (ADR-053 revised): a rule downgraded in `.rac/config.yaml` is downgraded for
+  `rac review`/`watchkeeper`/`portfolio` too, not only `rac validate` — so a
+  warnings-first policy is consistent across every surface.
+
 - Relationship-graph integrity (v0.16.0): `rac relationships --validate` now
   validates the corpus as a graph (ADR-055). A `## Related <Type>` reference that
   resolves to the wrong artifact type is reported as

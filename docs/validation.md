@@ -5,6 +5,24 @@ error-severity finding, and (over a directory) when the corpus is not a
 conformant OKF v0.1 bundle. Two features make that gate adoptable in CI on a
 real, pre-existing repository.
 
+## Per-type standards checks
+
+Beyond structure, `rac validate` lints each type against the standards it cites
+(ADR-056) — all deterministic, no AI:
+
+| Code | Severity | Standard |
+| --- | --- | --- |
+| `requirement-normative-keyword` | error | BCP-14: only uppercase MUST/SHALL/SHOULD/MAY are normative; lowercase is ambiguous. |
+| `requirement-not-singular` | warning | ISO 29148: one normative statement per requirement line. |
+| `requirement-non-ears` | warning | EARS: a requirement must state a normative response (SHALL/SHOULD/MAY). |
+| `requirement-ears-clause` | warning | EARS: a sentence-initial `If …` needs a `then` response clause. |
+| `invalid-roadmap-horizon` | error | A `## Horizon` value must be `now`/`next`/`later` or a quarter (e.g. `Q3 2026`); the section is optional. |
+| `roadmap-no-advancement-link` | warning | A roadmap should link a `## Related Requirements` or `## Related Decisions` it advances. |
+
+The BCP-14 error is the only gate-breaker; the rest are warnings, and all are
+overridable below. (RAC's own corpus predates these checks and disables them in
+its `.rac/config.yaml` — the warnings-first path in action.)
+
 ## Severity overrides (warnings-first onboarding)
 
 Pointing `rac validate` at a legacy corpus for the first time can surface many
@@ -12,6 +30,8 @@ pre-existing findings at once. Rather than fail the build on all of them, a
 repository can downgrade or silence specific findings in its committed
 `.rac/config.yaml`, then tighten the gate over time. The decision behind this is
 [ADR-053](https://github.com/tcballard/requirements-as-code/blob/main/rac/decisions/adr-053-validation-severity-overrides.md).
+Overrides are **repository-wide**: a downgrade applies to `rac review`,
+`rac watchkeeper`, and `rac portfolio` as well as `rac validate`.
 
 Add an optional `validation` section:
 

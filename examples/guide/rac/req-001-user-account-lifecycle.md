@@ -18,11 +18,11 @@ closed account from being used for authentication.
 
 ## Requirements
 
-- [REQ-001] The service must create a user account with a unique identifier, email address, and creation timestamp.
-- [REQ-002] The service must deactivate a user account without destroying its history or audit trail.
-- [REQ-003] Deactivated accounts must not be returned by default user queries.
-- [REQ-004] The full history of a user account must be recoverable by support and compliance staff after deactivation.
-- [REQ-005] The service must support GDPR subject-access requests for deactivated accounts.
+- [REQ-001] The service MUST create a user account with a unique identifier, email address, and creation timestamp.
+- [REQ-002] The service MUST deactivate a user account without destroying its history or audit trail.
+- [REQ-003] Deactivated accounts MUST NOT be returned by default user queries.
+- [REQ-004] The full history of a user account MUST be recoverable by support and compliance staff after deactivation.
+- [REQ-005] The service MUST fulfil GDPR subject-access requests for deactivated accounts.
 
 ## Success Metrics
 

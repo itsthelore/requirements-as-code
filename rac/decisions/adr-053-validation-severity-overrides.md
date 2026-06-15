@@ -58,11 +58,15 @@ custom-type JSON-Schema registry ADR-052 deferred.
    before status and exit code are computed, so a downgraded type or rule keeps
    the run green.
 
-4. **Scope: the `rac validate` entrypoints only.** Overrides apply to directory
-   and single-file `rac validate` (core findings and OKF conformance findings,
-   which gain a `severity`). The repository model behind `review`, `watchkeeper`,
-   and `portfolio` is unchanged (it validates with no overrides), so those
-   surfaces keep reporting the corpus as authored.
+4. **Scope: repository-wide (revised in v0.17.1).** Overrides are a repository
+   policy, so they apply wherever RAC evaluates the corpus's findings — `rac
+   validate` (directory and single-file, core + OKF findings) *and* the repository
+   model behind `review`, `watchkeeper`, and `portfolio`. The original v0.15.2
+   scoping applied overrides to `rac validate` only; v0.17.1 broadened it because a
+   rule a team downgrades in `.rac/config.yaml` should be downgraded everywhere —
+   it is incoherent for `rac validate` to report green while `rac review` flags the
+   same downgraded finding as blocking. (Repositories that declare no `validation`
+   section are unchanged, the common case.)
 
 5. **Determinism preserved (ADR-002).** The overrides live in a committed file,
    so the same repository state yields the same findings and exit code. Malformed
@@ -96,8 +100,9 @@ custom-type JSON-Schema registry ADR-052 deferred.
 
 ### Neutral
 
-- `review`/`watchkeeper`/`portfolio` deliberately ignore overrides; whether they
-  should honour them is a separate, later decision.
+- Since v0.17.1, `review`/`watchkeeper`/`portfolio` honour overrides too (the
+  repository model loads them from `.rac/config.yaml`), so a repository's severity
+  policy is consistent across every surface.
 
 ## Alternatives Considered
 

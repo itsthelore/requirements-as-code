@@ -30,7 +30,9 @@ from rac.core.artifacts import ARTIFACT_SPECS, spec_for
 from rac.core.classification import missing_sections
 from rac.core.corpus import CorpusEntry, walk_corpus
 from rac.core.identity import artifact_identifier
+from rac.core.overrides import apply_overrides
 from rac.core.validation import has_errors, validate
+from rac.services.init import load_overrides
 
 from .relationships import (
     ISSUE_SELF_REFERENCE,
@@ -181,6 +183,10 @@ def portfolio_from_corpus(
     the relationship summary, so a portfolio costs one walk instead of two.
     """
 
+    # Repository-wide severity overrides (ADR-053): review/portfolio/watchkeeper
+    # honour the same .rac/config.yaml policy as `rac validate`.
+    overrides = load_overrides(directory)
+
     # --- per-artifact pass ---------------------------------------------------
     by_type: dict[str, int] = {spec.name: 0 for spec in ARTIFACT_SPECS}
     by_type["unknown"] = 0
@@ -210,8 +216,8 @@ def portfolio_from_corpus(
         identifier = artifact_identifier(product, spec, str(path))
         path_to_identifier[str(path)] = identifier
 
-        # Validation
-        issues = validate(product)
+        # Validation (overrides applied, ADR-053)
+        issues = apply_overrides(validate(product), artifact_type, overrides)
         if has_errors(issues):
             invalid_count += 1
             error_codes = [i.code for i in issues if i.severity == "error"]
