@@ -37,6 +37,33 @@ def test_both_real_arms_run_and_emit_valid_runresults():
             assert rr["arm"] == arm
 
 
+def test_run_one_records_embedder_metadata():
+    # Retrieval arms record the embedder id + dim; non-embedding arms record null.
+    model = ScriptedAnsweringModel(seed=0)
+    sc = load_scenarios(_SCENARIOS)[0]
+    rr_rag = run_one("naive_rag", sc, model, seed=0, embedder="local-hash")
+    assert rr_rag["embedder"] == {"name": "local-hash-bow-256", "dim": 256}
+    _validate_run(rr_rag)
+    rr_cd = run_one("context_dump", sc, model, seed=0)
+    assert rr_cd["embedder"] is None
+    _validate_run(rr_cd)
+
+
+def test_build_dataset_honors_ns_and_defaults_to_offline_backends():
+    # Backward compatible: explicit offline backends + a custom ns sweep.
+    scenarios = load_scenarios(_SCENARIOS)
+    ds = build_dataset(
+        scenarios,
+        arms=("context_dump", "naive_rag"),
+        ns=(10, 50),
+        answering_model_name="offline-stub",
+        embedder_spec="local-hash",
+    )
+    assert ds["ns"] == [10, 50]
+    assert ds["embedder"] == "local-hash"
+    assert [p["N"] for p in ds["arms"]["naive_rag"]] == [10, 50]
+
+
 def test_tiny_corpus_is_an_expected_tie():
     # On the tiny corpus both real arms should adhere on every worked scenario.
     model = ScriptedAnsweringModel(seed=0)
