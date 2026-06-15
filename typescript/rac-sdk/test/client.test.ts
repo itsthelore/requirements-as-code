@@ -1,0 +1,166 @@
+import { describe, expect, it } from "vitest";
+
+import { RacClient } from "../src/client.js";
+import {
+  RacExecError,
+  RacNotFoundError,
+  RacOutputError,
+} from "../src/errors.js";
+import type { RacRunner, RunResult } from "../src/runner.js";
+import { isResolved } from "../src/types.js";
+
+/** A fake runner that records the args it was called with and returns canned output. */
+function fakeRunner(
+  result: Partial<RunResult> & { stdout: string },
+): { runner: RacRunner; calls: string[][] } {
+  const calls: string[][] = [];
+  const runner: RacRunner = async (_bin, args) => {
+    calls.push([...args]);
+    return { stdout: result.stdout, stderr: result.stderr ?? "", code: result.code ?? 0 };
+  };
+  return { runner, calls };
+}
+
+describe("validateFile", () => {
+  it("parses a clean result", async () => {
+    const { runner } = fakeRunner({
+      stdout: JSON.stringify({ file: "a.md", valid: true, errors: [], warnings: [] }),
+    });
+    const rac = new RacClient({ runner });
+    const result = await rac.validateFile("a.md");
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("returns the result on exit 1 (validation found issues, not an error)", async () => {
+    const { runner, calls } = fakeRunner({
+      code: 1,
+      stdout: JSON.stringify({
+        file: "bad.md",
+        valid: false,
+        errors: [{ severity: "error", code: "missing-title", message: "no title", line: null }],
+        warnings: [{ severity: "warning", code: "missing-risks", message: "no risks", line: null }],
+      }),
+    });
+    const rac = new RacClient({ runner });
+    const result = await rac.validateFile("bad.md");
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]?.code).toBe("missing-title");
+    expect(result.warnings[0]?.code).toBe("missing-risks");
+    expect(calls[0]).toEqual(["validate", "bad.md", "--json"]);
+  });
+});
+
+describe("validateDirectory", () => {
+  it("parses the summary and adds --top-level when recursive is false", async () => {
+    const { runner, calls } = fakeRunner({
+      stdout: JSON.stringify({
+        schema_version: "1",
+        directory: "rac",
+        recursive: false,
+        summary: { total_files: 2, checked: 2, valid: 2, invalid: 0, skipped_unknown: 0 },
+        valid: true,
+        files: [],
+      }),
+    });
+    const rac = new RacClient({ runner });
+    const result = await rac.validateDirectory("rac", { recursive: false });
+    expect(result.summary.total_files).toBe(2);
+    expect(calls[0]).toEqual(["validate", "rac", "--json", "--top-level"]);
+  });
+});
+
+describe("resolve", () => {
+  it("narrows a successful resolution with isResolved", async () => {
+    const { runner } = fakeRunner({
+      stdout: JSON.stringify({
+        schema_version: "1",
+        id: "RAC-1",
+        type: "decision",
+        title: "ADR-001",
+        path: "rac/decisions/adr-001.md",
+      }),
+    });
+    const result = await new RacClient({ runner }).resolve("adr-001", "rac");
+    expect(isResolved(result)).toBe(true);
+    if (isResolved(result)) expect(result.path).toContain("adr-001");
+  });
+
+  it("returns a typed not-found outcome (exit 0, error field)", async () => {
+    const { runner } = fakeRunner({
+      stdout: JSON.stringify({ schema_version: "1", error: "not-found", id: "nope" }),
+    });
+    const result = await new RacClient({ runner }).resolve("nope");
+    expect(isResolved(result)).toBe(false);
+    if (!isResolved(result)) expect(result.error).toBe("not-found");
+  });
+});
+
+describe("find", () => {
+  it("passes --type and parses matches", async () => {
+    const { runner, calls } = fakeRunner({
+      stdout: JSON.stringify({
+        schema_version: "1",
+        query: "sdk",
+        type: "roadmap",
+        match_count: 1,
+        matches: [{ id: "RAC-2", type: "roadmap", title: "TS SDK", path: "x.md" }],
+      }),
+    });
+    const result = await new RacClient({ runner }).find("sdk", { dir: "rac", type: "roadmap" });
+    expect(result.match_count).toBe(1);
+    expect(calls[0]).toEqual(["find", "sdk", "rac", "--type", "roadmap", "--json"]);
+  });
+});
+
+describe("validateRelationships", () => {
+  it("parses relationship issues", async () => {
+    const { runner, calls } = fakeRunner({
+      code: 1,
+      stdout: JSON.stringify({
+        directory: "rac",
+        recursive: true,
+        relationships_checked: 10,
+        validation_issues: 1,
+        issues: [
+          { source_path: "a.md", relationship: "related_requirements", target: "x", code: "relationship-target-not-found" },
+        ],
+      }),
+    });
+    const result = await new RacClient({ runner }).validateRelationships("rac");
+    expect(result.validation_issues).toBe(1);
+    expect(result.issues[0]?.code).toBe("relationship-target-not-found");
+    expect(calls[0]).toEqual(["relationships", "rac", "--validate", "--json"]);
+  });
+});
+
+describe("error mapping", () => {
+  it("raises RacNotFoundError when the binary cannot be spawned", async () => {
+    const runner: RacRunner = async () => {
+      const err = new Error("spawn rac ENOENT") as NodeJS.ErrnoException;
+      err.code = "ENOENT";
+      throw err;
+    };
+    await expect(new RacClient({ runner }).validateFile("a.md")).rejects.toBeInstanceOf(
+      RacNotFoundError,
+    );
+  });
+
+  it("raises RacExecError on a usage error (exit 2, stderr, no JSON)", async () => {
+    const runner: RacRunner = async () => ({
+      stdout: "",
+      stderr: "rac: file not found: a.md",
+      code: 2,
+    });
+    await expect(new RacClient({ runner }).validateFile("a.md")).rejects.toBeInstanceOf(
+      RacExecError,
+    );
+  });
+
+  it("raises RacOutputError on a clean exit with non-JSON output", async () => {
+    const runner: RacRunner = async () => ({ stdout: "not json", stderr: "", code: 0 });
+    await expect(new RacClient({ runner }).stats("rac")).rejects.toBeInstanceOf(
+      RacOutputError,
+    );
+  });
+});
