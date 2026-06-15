@@ -20,6 +20,10 @@ reimplementing it ([ADR-063](../../rac/decisions/adr-063-non-python-clients-are-
 - **Live validation** — diagnostics update as you type (the unsaved buffer is
   piped through `rac validate -`, debounced), and immediately on open/save.
   Errors + warnings are mapped to the right lines.
+- **Cross-artifact enforcement** — references that don't resolve, and references
+  to **retired** (superseded/deprecated) artifacts, are flagged at the reference
+  site, drawn distinctly (from `rac relationships --validate`). Refreshes on
+  save/activation, since relationship validation reads files from disk.
 - **Hover** — hovering an artifact ID or alias (e.g. `adr-007`,
   `v0.20.0-python-sdk-foundation`) shows its title, type, and path via
   `rac resolve`.
