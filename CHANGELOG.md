@@ -8,6 +8,13 @@ details, release history over commit history.
 
 ### Added
 
+- Authoring aids in the editor extension (v0.21.2 milestone). Inside a
+  relationship section, the extension now offers **artifact-alias completion**
+  (human aliases like `adr-007`, from a cached `rac export`); **quick-fixes**
+  insert a missing `## Section` to clear a `missing-<section>` finding; and a
+  **RAC: New Artifact** command scaffolds an artifact of any type via `rac new`.
+  The SDK gains `schema(type)` and `createArtifact(type, path)`.
+
 - Cross-artifact enforcement in the editor extension (v0.21.1 milestone). The
   extension now flags references that don't resolve, and references to **retired**
   (superseded/deprecated) artifacts, at the reference site — drawn distinctly
