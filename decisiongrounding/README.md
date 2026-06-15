@@ -107,10 +107,23 @@ python -m runner.cli compare \
 with its `query` role, so the RAG baseline uses asymmetric query/document
 embeddings the way Voyage intends — a fair, strong baseline, not a strawman.
 The default Voyage model is `voyage-4-large` (Voyage's current flagship);
-override with `--embedder voyage:<model>`.
+override with `--embedder voyage:<model>`. Each report records the embedder id +
+dimension and the installed `anthropic`/`voyageai` versions (`backend_versions`)
+so a run says exactly what produced it.
 
-This is where the thesis is actually tested. Until it runs on real/public-derived
-corpora, the offline crossover is plumbing, not evidence.
+The **crossover** can also run on the real backends:
+
+```bash
+# Real-model crossover. --ns keeps the API spend small (arms x scenarios x |ns|).
+python -m runner.cli demo \
+  --answering claude --embedder voyage:voyage-4-large --ns 10,50
+```
+
+This is where the thesis is actually tested — but note the boundary: with
+`--answering claude` you get a real-*model* crossover **on the tiny synthetic
+scenarios**. That is the plumbing for evidence, not the evidence. The real
+result requires real/public-derived corpora (see CONTRIBUTING.md); until then
+the crossover is plumbing, not evidence.
 
 Tests:
 
