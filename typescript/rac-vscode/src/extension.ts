@@ -4,10 +4,15 @@
  * Wires the `@rac/sdk` thin client to the editor. All analysis stays in `rac`
  * (ADR-063); this extension maps its output into the editor:
  *
- *  - validation diagnostics, live as you type (the unsaved buffer is piped
- *    through `rac validate -`), debounced, plus immediately on open/save;
+ *  - per-file validation diagnostics, live as you type (the unsaved buffer is
+ *    piped through `rac validate -`), debounced, plus immediately on open/save;
+ *  - cross-artifact enforcement: broken and retired-target references surfaced
+ *    at the reference site, from `rac relationships --validate` (refreshed on
+ *    save/activation, since relationship validation reads files from disk);
  *  - hover and go-to-definition on artifact IDs / aliases via `rac resolve`.
  */
+
+import * as path from "node:path";
 
 import * as vscode from "vscode";
 
@@ -17,24 +22,34 @@ import {
   isResolved,
   type FileValidation,
   type Issue,
+  type RelationshipIssue,
+  type RelationshipValidation,
   type ResolvedArtifact,
 } from "@rac/sdk";
 
 const DEBOUNCE_MS = 300;
+const RELATIONSHIP_DEBOUNCE_MS = 600;
 
 let diagnostics: vscode.DiagnosticCollection;
+let relationshipDiagnostics: vscode.DiagnosticCollection;
 const clients = new Map<string, RacClient>();
 const debounce = new Map<string, ReturnType<typeof setTimeout>>();
+const relationshipDebounce = new Map<string, ReturnType<typeof setTimeout>>();
 let warnedMissing = false;
 
 export function activate(context: vscode.ExtensionContext): void {
   diagnostics = vscode.languages.createDiagnosticCollection("rac");
+  relationshipDiagnostics = vscode.languages.createDiagnosticCollection("rac-relationships");
   const selector: vscode.DocumentSelector = { language: "markdown", scheme: "file" };
 
   context.subscriptions.push(
     diagnostics,
+    relationshipDiagnostics,
     vscode.workspace.onDidOpenTextDocument((doc) => void validateDocument(doc)),
-    vscode.workspace.onDidSaveTextDocument((doc) => void validateDocument(doc)),
+    vscode.workspace.onDidSaveTextDocument((doc) => {
+      void validateDocument(doc);
+      scheduleRelationshipsFor(doc);
+    }),
     vscode.workspace.onDidChangeTextDocument((e) => scheduleValidate(e.document)),
     vscode.workspace.onDidCloseTextDocument((doc) => {
       cancelScheduled(doc);
@@ -44,6 +59,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (e.affectsConfiguration("rac")) {
         clients.clear();
         void validateWorkspace();
+        refreshAllRelationships();
       }
     }),
     vscode.commands.registerCommand("rac.validateWorkspace", validateWorkspace),
@@ -52,16 +68,21 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   for (const doc of vscode.workspace.textDocuments) void validateDocument(doc);
+  refreshAllRelationships();
 }
 
 export function deactivate(): void {
   for (const timer of debounce.values()) clearTimeout(timer);
+  for (const timer of relationshipDebounce.values()) clearTimeout(timer);
   debounce.clear();
+  relationshipDebounce.clear();
   diagnostics?.clear();
   diagnostics?.dispose();
+  relationshipDiagnostics?.clear();
+  relationshipDiagnostics?.dispose();
 }
 
-// --- diagnostics ------------------------------------------------------------
+// --- per-file validation ----------------------------------------------------
 
 function isEnabled(): boolean {
   return vscode.workspace
@@ -138,6 +159,147 @@ async function validateWorkspace(): Promise<void> {
   for (const doc of vscode.workspace.textDocuments) {
     await validateDocument(doc);
   }
+  refreshAllRelationships();
+}
+
+// --- cross-artifact enforcement ---------------------------------------------
+
+// Severity and message per relationship-validation code. The headline split:
+// a reference that does not resolve (error) vs. a reference to a retired
+// (superseded/deprecated) artifact (warning) — the latter is what makes the
+// extension RAC, not a generic linter (ADR-049, ADR-051).
+const RELATIONSHIP_SEVERITY: Record<string, vscode.DiagnosticSeverity> = {
+  "relationship-target-not-found": vscode.DiagnosticSeverity.Error,
+  "relationship-target-ambiguous": vscode.DiagnosticSeverity.Error,
+  "relationship-cycle": vscode.DiagnosticSeverity.Error,
+  "relationship-target-type-mismatch": vscode.DiagnosticSeverity.Warning,
+  "relationship-target-superseded": vscode.DiagnosticSeverity.Warning,
+  "relationship-self-reference": vscode.DiagnosticSeverity.Warning,
+  "relationship-edge-unsupported": vscode.DiagnosticSeverity.Warning,
+};
+
+const RELATIONSHIP_MESSAGE: Record<string, string> = {
+  "relationship-target-not-found": "Reference does not resolve",
+  "relationship-target-ambiguous": "Ambiguous reference (matches multiple artifacts)",
+  "relationship-cycle": "Relationship cycle through",
+  "relationship-target-type-mismatch": "Reference resolves to the wrong artifact type",
+  "relationship-target-superseded": "References a retired (superseded/deprecated) artifact",
+  "relationship-self-reference": "Artifact references itself",
+  "relationship-edge-unsupported": "Unsupported relationship for this artifact type",
+};
+
+function scheduleRelationshipsFor(doc: vscode.TextDocument): void {
+  if (doc.languageId !== "markdown" || doc.uri.scheme !== "file") return;
+  if (!looksLikeRacArtifact(doc.getText())) return;
+  const folder = vscode.workspace.getWorkspaceFolder(doc.uri);
+  if (folder) scheduleRelationships(folder);
+}
+
+function scheduleRelationships(folder: vscode.WorkspaceFolder): void {
+  const key = folder.uri.fsPath;
+  const existing = relationshipDebounce.get(key);
+  if (existing) clearTimeout(existing);
+  relationshipDebounce.set(
+    key,
+    setTimeout(() => {
+      relationshipDebounce.delete(key);
+      void refreshRelationships(folder);
+    }, RELATIONSHIP_DEBOUNCE_MS),
+  );
+}
+
+function refreshAllRelationships(): void {
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    void refreshRelationships(folder);
+  }
+}
+
+async function refreshRelationships(folder: vscode.WorkspaceFolder): Promise<void> {
+  if (!isEnabled()) return;
+  let result: RelationshipValidation;
+  try {
+    // Relationship validation reads files from disk, so it reflects the saved
+    // corpus (not unsaved buffers) — hence save/activation-triggered.
+    result = await clientFor(folder).validateRelationships(folder.uri.fsPath);
+  } catch (err) {
+    if (err instanceof RacNotFoundError) warnMissingOnce();
+    else console.error("RAC: relationship validation failed", err);
+    return;
+  }
+
+  const byFile = new Map<string, RelationshipIssue[]>();
+  for (const issue of result.issues) {
+    const list = byFile.get(issue.source_path) ?? [];
+    list.push(issue);
+    byFile.set(issue.source_path, list);
+  }
+
+  relationshipDiagnostics.clear();
+  for (const [source, issues] of byFile) {
+    const uri = path.isAbsolute(source)
+      ? vscode.Uri.file(source)
+      : vscode.Uri.joinPath(folder.uri, source);
+    let doc: vscode.TextDocument;
+    try {
+      doc = await vscode.workspace.openTextDocument(uri);
+    } catch {
+      continue; // a referenced source we cannot open — skip rather than guess.
+    }
+    relationshipDiagnostics.set(
+      uri,
+      issues.map((issue) => relationshipDiagnostic(doc, issue)),
+    );
+  }
+}
+
+function relationshipDiagnostic(
+  doc: vscode.TextDocument,
+  issue: RelationshipIssue,
+): vscode.Diagnostic {
+  const range = findReferenceRange(doc, issue.relationship, issue.target);
+  const label = RELATIONSHIP_MESSAGE[issue.code] ?? "Relationship issue";
+  const severity = RELATIONSHIP_SEVERITY[issue.code] ?? vscode.DiagnosticSeverity.Warning;
+  const diagnostic = new vscode.Diagnostic(range, `${label}: ${issue.target}`, severity);
+  diagnostic.source = "rac";
+  diagnostic.code = issue.code;
+  return diagnostic;
+}
+
+// Relationship issues carry no line, so anchor the diagnostic on the target
+// token inside the declared relationship section (e.g. "## Related Decisions"),
+// falling back to the section heading, then the file head.
+function findReferenceRange(
+  doc: vscode.TextDocument,
+  relationship: string,
+  target: string,
+): vscode.Range {
+  const lines = doc.getText().split(/\r?\n/);
+  const heading = relationshipHeading(relationship);
+  const headingRe = new RegExp(`^#{1,6}\\s+${escapeRegExp(heading)}\\s*$`, "i");
+  const headingIdx = lines.findIndex((line) => headingRe.test(line));
+
+  const from = headingIdx >= 0 ? headingIdx + 1 : 0;
+  for (let i = from; i < lines.length; i++) {
+    if (headingIdx >= 0 && /^#{1,6}\s+/.test(lines[i])) break; // next heading ends the section
+    const col = lines[i].indexOf(target);
+    if (col >= 0) return new vscode.Range(i, col, i, col + target.length);
+  }
+  if (headingIdx >= 0) {
+    return new vscode.Range(headingIdx, 0, headingIdx, lines[headingIdx].length);
+  }
+  return new vscode.Range(0, 0, 0, Number.MAX_SAFE_INTEGER);
+}
+
+function relationshipHeading(relationship: string): string {
+  // "related_requirements" -> "Related Requirements"
+  return relationship
+    .split("_")
+    .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : word))
+    .join(" ");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // --- hover & go-to-definition ----------------------------------------------
