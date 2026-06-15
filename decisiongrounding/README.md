@@ -125,6 +125,41 @@ scenarios**. That is the plumbing for evidence, not the evidence. The real
 result requires real/public-derived corpora (see CONTRIBUTING.md); until then
 the crossover is plumbing, not evidence.
 
+### Real-corpus pilot (PEP supersession)
+
+`scenarios_real/` holds the first **real, public-derived** corpus: the
+**PEP 386 → PEP 440** version-scheme supersession. PEP 386 carries
+`Status: Superseded` / `Superseded-By: 440`; PEP 440 (`Replaces: 386`) states
+"this PEP MUST be used … and supersedes PEP 386 … Tools SHOULD ignore any
+versions which cannot be parsed by the rules in this PEP." An agent that reaches
+for PEP 386's retired `verlib`/`NormalizedVersion` scheme is following a
+superseded decision; the adherent move is to cite PEP 440 instead. See
+`decisions/ADR-0002-real-corpus-pilot-peps.md`.
+
+The corpus is pinned to one immutable commit of `python/peps` and is fully
+reproducible — nothing in it is hand-written PEP prose:
+
+```bash
+# Regenerate the corpus from the pin, or verify it reproduces byte-for-byte.
+python -m ingest.peps build  --out scenarios_real/peps_version_supersession
+python -m ingest.peps verify --out scenarios_real/peps_version_supersession
+```
+
+Run the pilot for real (needs `[real]` + both keys, exactly as above):
+
+```bash
+python -m runner.cli compare \
+  --arms context_dump,naive_rag,no_grounding \
+  --answering claude --embedder voyage:voyage-4-large \
+  --scenarios scenarios_real --seed 0
+```
+
+This produces the first genuine decision-adherence result (win, tie, or loss)
+on a real corpus; like every run it is appended to `results/`. The build
+environment for this pilot had no API keys, so the scenario is offline-validated
+(loads, schema-validates, scores) and the real numbers are produced by whoever
+holds the keys.
+
 Tests:
 
 ```bash
@@ -146,9 +181,10 @@ make test
 | Pinned Claude answering model (`--answering claude`, Opus 4.8) | ✅ implemented; needs `[real]` + `ANTHROPIC_API_KEY` |
 | Real embeddings (`--embedder voyage:…` / `st:…`) | ✅ implemented; needs `[real]` / `[local-embeddings]` |
 | `rac` arm (typed retrieval, follows `supersedes`) | ✅ implemented; needs the `rac` CLI on PATH |
+| Real/public-derived scenario (PEP 386→440 supersession) | ✅ corpus built, pinned + verifiable; real run needs `[real]` + keys |
 | `memory_provider` arm | ⏳ typed stub + TODO |
 | LLM-judge fallback | ⏳ disclosed, not built |
-| Full N=300 corpus (real/public-derived) | ⏳ next increment |
+| Full N=300 corpus (real/public-derived) | ⏳ next increment (more real pairs) |
 
 > **Pinned model caveat:** the answering model is `claude-opus-4-8`, which
 > rejects `temperature`/`top_p`/`seed` (the API 400s on them). There is no
@@ -165,11 +201,13 @@ decisiongrounding/
   spec/        FROZEN scenario taxonomy + scoring rubric (pre-registration)
   schema/      JSON Schema (Draft 2020-12) for Scenario and RunResult
   providers/   uniform adapter (prepare/respond) + the arms + answering/embedding
-  scenarios/   loader + four worked scenarios with tiny synthetic corpora
+  scenarios/   loader + worked scenarios with tiny synthetic corpora
+  scenarios_real/  real/public-derived corpora (PEP supersession pilot)
+  ingest/      deterministic ingest of public artifacts (PEPs) into corpora
   scoring/     deterministic scorer, metrics, crossover dataset + chart
   runner/      CLI; pins model + seed; append-only report writer
   results/     append-only run outputs (generated; not committed)
-  tests/       schema, scorer, and offline arm-smoke coverage
+  tests/       schema, scorer, ingest, real-corpus, and offline arm-smoke coverage
 ```
 
 ## Add an arm

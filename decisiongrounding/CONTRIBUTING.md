@@ -63,6 +63,20 @@ temperature + seed so it reproduces.
    `rationale`.
 4. `make test`.
 
+### Real vs synthetic scenarios
+
+`scenarios/` is for **synthetic** worked scenarios that exercise the harness;
+they are never reported as results (rule 2). **Real / public-derived** corpora —
+the only ones eligible to be reported — live under `scenarios_real/`, kept
+physically separate so the default offline demo never blurs the line.
+
+Real corpus material must be **reproducible**, not transcribed: derive it from a
+public source pinned to an immutable revision, and commit the verbatim artifact
+plus a `provenance.json` recording the source URL and a content hash. The PEP
+pilot does this via `ingest/peps.py` (`build` / `verify`) against a pinned
+`python/peps` commit. Excerpting or paraphrasing the source is the cherry-picking
+rule 2 forbids — pin, fetch verbatim, and hash instead.
+
 ## Adding an arm
 
 See "Add an arm" in the README. Then confirm it is scored by the same
