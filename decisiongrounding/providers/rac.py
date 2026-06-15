@@ -19,10 +19,29 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+
+_TOKEN = re.compile(r"[a-z0-9]+")
+_STOP = {
+    "the", "a", "an", "to", "of", "and", "or", "for", "in", "on", "with", "is",
+    "are", "be", "as", "by", "this", "that", "it", "our", "we", "you", "so",
+    "can", "it", "use", "using", "follow", "add", "need", "needs", "standard",
+}
+
+
+def _query_tokens(text: str) -> list[str]:
+    """Salient single terms for `rac find`, which substring-matches ID/title and
+    narrows on multi-word queries. Querying one term at a time and unioning the
+    hits is the deterministic way to retrieve by topic over that surface."""
+    seen: list[str] = []
+    for tok in _TOKEN.findall(text.lower()):
+        if tok not in _STOP and len(tok) > 3 and tok not in seen:
+            seen.append(tok)
+    return seen
 
 from .base import (
     SCAFFOLD,
@@ -93,6 +112,23 @@ class RacProvider(Provider):
         ).stdout
         return json.loads(out)
 
+    def _find_candidates(self, task: Task) -> list[str]:
+        """Union `rac find` hits across salient task terms, ranked by hit count
+        then first appearance. Deterministic given the corpus and task."""
+        hits: dict[str, int] = {}
+        order: list[str] = []
+        for term in _query_tokens(f"{task.prompt} {task.proposed_action}"):
+            res = self._run("find", term, str(self._dir), "--type", "decision", "--json")
+            for m in res.get("matches", []):
+                mid = m.get("id")
+                if not mid:
+                    continue
+                if mid not in hits:
+                    hits[mid] = 0
+                    order.append(mid)
+                hits[mid] += 1
+        return sorted(order, key=lambda i: (-hits[i], order.index(i)))
+
     def prepare(self, corpus: list[CorpusArtifact]) -> None:
         # Write the corpus to a temp dir so the external `rac` CLI can index it.
         self._by_id = {a.id: a for a in corpus}
@@ -105,11 +141,11 @@ class RacProvider(Provider):
     def respond(self, task: Task):
         if self._dir is None:
             raise RuntimeError("rac arm: prepare() must run before respond()")
-        query = f"{task.prompt} {task.proposed_action}"
-
-        # 1. Typed candidate decisions, ranked by rac's deterministic search.
-        find = self._run("find", query, str(self._dir), "--type", "decision", "--json")
-        matched = [m.get("id") for m in find.get("matches", []) if m.get("id")]
+        # 1. Typed candidate decisions. `rac find` substring-matches ID/title and
+        # ANDs multi-word queries, so we query one salient task term at a time and
+        # union the hits, ranking by how many terms hit each decision (then by
+        # first appearance) — a deterministic topic search over rac's surface.
+        matched = self._find_candidates(task)
 
         # 2. Relationship graph → supersedes edges (source supersedes target).
         rels = self._run("relationships", str(self._dir), "--json")
@@ -150,7 +186,11 @@ def _extract_supersedes_edges(rels_json: dict) -> list[tuple[str, str]]:
                 edges.append((src, tgt))
 
     for art in rels_json.get("artifacts", []) or []:
-        src = art.get("id")
+        # `rac relationships --json` identifies each artifact by `path`, not `id`
+        # (this rac build emits no `id` here). The arm writes the corpus as
+        # `<id>.md`, so the file stem is the artifact id; prefer an explicit `id`
+        # if a future rac version adds one.
+        src = art.get("id") or Path(art.get("path", "")).stem or None
         targets = (art.get("relationships") or {}).get("supersedes") or []
         for tgt in targets:
             if src and tgt:
