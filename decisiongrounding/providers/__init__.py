@@ -33,8 +33,8 @@ from .naive_rag import NaiveRagProvider
 from .no_grounding import NoGroundingProvider
 from .rac import RacProvider, resolve_supersedes
 
-# Arm registry. Real, runnable arms this pass: context_dump, naive_rag.
-# The rest are typed stubs (raise NotImplementedError on use).
+# Real, runnable arms this pass: context_dump, naive_rag, no_grounding (offline);
+# rac (needs the external rac CLI). memory_provider is a typed stub.
 ARMS: dict[str, type[Provider]] = {
     "context_dump": ContextDumpProvider,
     "naive_rag": NaiveRagProvider,
@@ -43,7 +43,7 @@ ARMS: dict[str, type[Provider]] = {
     "memory_provider": MemoryProviderArm,
 }
 
-REAL_ARMS = ("context_dump", "naive_rag")
+REAL_ARMS = ("context_dump", "naive_rag", "no_grounding")
 
 __all__ = [
     "ARMS",
