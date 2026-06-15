@@ -11,9 +11,13 @@ import pytest
 
 from providers import (
     ClaudeAnsweringModel,
+    ContextDumpProvider,
     LocalDeterministicEmbedder,
+    NaiveRagProvider,
     ScriptedAnsweringModel,
     VoyageEmbedder,
+    build_provider,
+    make_answering_model,
     make_embedder,
     resolve_supersedes,
 )
@@ -100,3 +104,24 @@ def test_claude_answering_model_is_pinned():
     m = ClaudeAnsweringModel(seed=0)
     assert m.version == "claude-opus-4-8"  # pinned model id
     assert m.temperature is None  # Opus 4.8 exposes no temperature/seed knob
+
+
+# --- shared backend factories (reused by CLI and crossover) -----------------
+
+def test_make_answering_model_routes_by_name():
+    assert isinstance(make_answering_model("offline-stub", 0), ScriptedAnsweringModel)
+    # Constructing the real model is lazy (no client/key needed until respond()).
+    assert isinstance(make_answering_model("claude", 0), ClaudeAnsweringModel)
+
+
+def test_make_answering_model_rejects_unknown():
+    with pytest.raises(ValueError):
+        make_answering_model("gpt", 0)
+
+
+def test_build_provider_wires_embedder_into_naive_rag_only():
+    model = ScriptedAnsweringModel(seed=0)
+    p = build_provider("naive_rag", model, "local-hash")
+    assert isinstance(p, NaiveRagProvider)
+    assert isinstance(p.embedder, LocalDeterministicEmbedder)
+    assert isinstance(build_provider("context_dump", model), ContextDumpProvider)
