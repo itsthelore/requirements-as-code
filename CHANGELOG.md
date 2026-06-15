@@ -8,6 +8,13 @@ details, release history over commit history.
 
 ### Added
 
+- RAC Explorer in the extension (v0.21.5 milestone). A **RAC: Open Explorer**
+  command renders the corpus relationship graph in a webview — the self-contained
+  Portal viewer produced by `rac export --html` (the `lore-web` build with the
+  corpus injected, offline). Re-run to refresh. The SDK gains `exportHtml(dir,
+  path)`. (Graph↔editor click-through is deferred — the standalone viewer doesn't
+  message a host.)
+
 - Ambient corpus awareness in the extension (v0.21.4 milestone). A **status-bar
   health score** (`rac review`, click for the Problems panel) and
   **workspace-wide diagnostics** (`rac validate <dir>`) so issues in unopened
