@@ -470,7 +470,13 @@ async function showExplorer(): Promise<void> {
       "racExplorer",
       "RAC Explorer",
       vscode.ViewColumn.Beside,
-      { enableScripts: true, retainContextWhenHidden: true },
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        // The Portal is self-contained (inlined scripts/styles/fonts) and loads
+        // no local files, so deny all local resource roots.
+        localResourceRoots: [],
+      },
     );
     explorerPanel = panel;
     // Wired only while the panel lives: the webview asks to open artifacts, and
@@ -563,7 +569,9 @@ async function loadExplorer(folder: vscode.WorkspaceFolder): Promise<void> {
   try {
     await clientFor(folder).exportHtml(folder.uri.fsPath, out);
     const html = await readFile(out, "utf8");
-    if (explorerPanel === panel) panel.webview.html = html;
+    if (explorerPanel === panel) {
+      panel.webview.html = hardenWebviewHtml(html, panel.webview.cspSource);
+    }
   } catch (err) {
     if (err instanceof RacNotFoundError) warnMissingOnce();
     if (explorerPanel === panel) {
@@ -573,6 +581,33 @@ async function loadExplorer(folder: vscode.WorkspaceFolder): Promise<void> {
   } finally {
     void rm(out, { force: true }).catch(() => undefined);
   }
+}
+
+// A strict Content-Security-Policy for the Explorer webview. The exported Portal
+// is self-contained — inline scripts and styles, data: fonts and images, and no
+// network — so `default-src 'none'` blocks any exfiltration (there is no
+// connect-src). Inline script/style and data: assets keep the offline viewer
+// working; the vendored shell uses no eval/WebAssembly, so 'unsafe-eval' is
+// deliberately not granted. `cspSource` is included so VS Code's own injected
+// webview resources (e.g. the `acquireVsCodeApi` bridge the sync relies on) are
+// permitted. The bridge itself stays origin-checked in handleExplorerMessage
+// (known message types only; opened paths confined to the workspace).
+function explorerCsp(cspSource: string): string {
+  return [
+    "default-src 'none'",
+    `img-src ${cspSource} data:`,
+    `font-src ${cspSource} data:`,
+    `style-src ${cspSource} 'unsafe-inline'`,
+    `script-src ${cspSource} 'unsafe-inline'`,
+  ].join("; ");
+}
+
+function hardenWebviewHtml(html: string, cspSource: string): string {
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${explorerCsp(cspSource)}">`;
+  // Insert the CSP as the first child of <head> so it governs the whole document.
+  return html.includes("<head>")
+    ? html.replace("<head>", `<head>${meta}`)
+    : `${meta}${html}`;
 }
 
 function explorerMessage(text: string): string {
