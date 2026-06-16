@@ -1,0 +1,17 @@
+{
+  "comment": "Compiles the @vscode/test-electron integration tests (src/test) to CommonJS in out/, which the VS Code test runner loads via require. Separate from the bundle build (esbuild) and the noEmit type-check (tsconfig.json).",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2022"],
+    "outDir": "out",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "types": ["node", "mocha", "vscode"]
+  },
+  "include": ["src/test"]
+}

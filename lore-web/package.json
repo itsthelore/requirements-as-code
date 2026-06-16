@@ -11,7 +11,8 @@
     "lantern": "node scripts/make-lantern.mjs",
     "corpus": "node scripts/make-corpus.mjs",
     "build:viewer": "tsc -b && vite build --config vite.config.viewer.ts && node scripts/build-viewer-artifact.mjs",
-    "vendor:shell": "node scripts/vendor-portal-shell.mjs"
+    "vendor:shell": "node scripts/vendor-portal-shell.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -22,7 +23,9 @@
     "@types/react": "^18.3.20",
     "@types/react-dom": "^18.3.6",
     "@vitejs/plugin-react": "^4.4.1",
+    "jsdom": "^29.1.1",
     "typescript": "~5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^4.1.9"
   }
 }

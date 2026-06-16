@@ -6,3 +6,7 @@ tsconfig.json
 .gitignore
 **/*.ts
 **/*.map
+
+out/**
+fixtures/**
+tsconfig.test.json
