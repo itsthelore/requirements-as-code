@@ -18,6 +18,8 @@ import type {
   PortfolioStats,
   QuickstartResult,
   RelationshipValidation,
+  RenamePlan,
+  RenameResult,
   ResolveResult,
   ReviewReport,
   SchemaReference,
@@ -142,6 +144,32 @@ export class RacClient {
   /** `rac schema <type> --json` — the canonical section/metadata reference for a type. */
   schema(artifactType: string): Promise<SchemaReference> {
     return this.json<SchemaReference>(["schema", artifactType, "--json"]);
+  }
+
+  /**
+   * `rac rename <old-id> <new-id> <dir> --json [--apply]` — rename an artifact
+   * id and rewrite every declared reference to it across the corpus (v0.21.18).
+   *
+   * Without `apply` this is a dry run returning a {@link RenamePlan}: the full
+   * edit set, or `ok: false` with a `reason` on a refusal. With `apply: true`
+   * the plan is written and a {@link RenameResult} is returned. The engine owns
+   * all reference discovery, validation, and editing; this client only shells
+   * the command and deserializes the result — it never computes the edit set or
+   * decides resolvability itself (ADR-063). The plan's stable `--json` shape is
+   * additive and `schema_version`-gated (ADR-007).
+   *
+   * A refusal exits non-zero (1); `json()` returns the parsed plan in that case,
+   * so a refusal surfaces through `plan.ok` / `plan.reason`, not a thrown error.
+   */
+  rename(
+    oldId: string,
+    newId: string,
+    directory: string,
+    options: { apply?: boolean } = {},
+  ): Promise<RenamePlan | RenameResult> {
+    const args = ["rename", oldId, newId, directory, "--json"];
+    if (options.apply) args.push("--apply");
+    return this.json<RenamePlan | RenameResult>(args);
   }
 
   /** `rac new <type> <path> --json` — scaffold a new artifact (never overwrites). */
