@@ -110,6 +110,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("rac.newArtifact", newArtifact),
     vscode.commands.registerCommand("rac.showExplorer", showExplorer),
     vscode.commands.registerCommand("rac.setupWorkspace", setupWorkspace),
+    vscode.commands.registerCommand("rac.setupAgentIntegration", () =>
+      setupAgentIntegration(context),
+    ),
     vscode.commands.registerCommand("rac.installRac", installRac),
     vscode.languages.registerHoverProvider(selector, { provideHover }),
     vscode.languages.registerDefinitionProvider(selector, { provideDefinition }),
@@ -1199,4 +1202,213 @@ async function setupWorkspace(): Promise<void> {
       `RAC: setup failed: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
+}
+
+// --- agent integration (roadmap v0.21.15, ADR-067) --------------------------
+//
+// "RAC: Set up agent integration" wires the corpus into the workspace's AI
+// agents. It computes nothing (ADR-063): `rac export --agent-rules` generates
+// the drift-guarded per-client rules files, and the extension only registers
+// the `lore` MCP server and offers regeneration when the corpus changes.
+//
+// The `lore` MCP server is launched as `rac mcp --root <corpus>` (the same read
+// tools the agent queries, ADR-030). Consent stays the user's: VS Code surfaces
+// the registered server for the user to enable; per-client config files
+// (.cursor/mcp.json, .mcp.json) are written but never auto-enabled (ADR-067
+// non-goal: no auto-enable without consent).
+
+// Track the active rules watcher so re-running setup (or deactivation) replaces
+// rather than stacks watchers.
+let agentRulesWatcher: vscode.FileSystemWatcher | undefined;
+let loreMcpProvider: vscode.Disposable | undefined;
+
+/** The `rac` binary the SDK resolves for a folder (config override, else PATH). */
+function racBinaryFor(folder: vscode.WorkspaceFolder): string {
+  const configured = vscode.workspace
+    .getConfiguration("rac", folder.uri)
+    .get<string>("path")
+    ?.trim();
+  return configured ? configured : "rac";
+}
+
+/**
+ * Register the `lore` MCP server (`rac mcp --root <corpus>`) so MCP-capable
+ * clients (Claude Code, Cursor) can query the corpus. Returns true when the
+ * VS Code MCP API was available and the registration was made. Consent is the
+ * user's: registration only *offers* the server; the user enables it.
+ */
+function registerLoreMcp(
+  context: vscode.ExtensionContext,
+  folder: vscode.WorkspaceFolder,
+): boolean {
+  const lm = vscode.lm as unknown as {
+    registerMcpServerDefinitionProvider?: (
+      id: string,
+      provider: vscode.McpServerDefinitionProvider,
+    ) => vscode.Disposable;
+  };
+  if (typeof lm.registerMcpServerDefinitionProvider !== "function") {
+    // Older VS Code / Cursor without the MCP provider API: fall back to the
+    // generated per-client config files only.
+    return false;
+  }
+
+  loreMcpProvider?.dispose();
+  const command = racBinaryFor(folder);
+  loreMcpProvider = lm.registerMcpServerDefinitionProvider("rac.lore", {
+    provideMcpServerDefinitions: () => [
+      new vscode.McpStdioServerDefinition(
+        "lore",
+        command,
+        ["mcp", "--root", folder.uri.fsPath],
+      ),
+    ],
+  });
+  context.subscriptions.push(loreMcpProvider);
+  return true;
+}
+
+/**
+ * Write a per-client MCP config (Cursor's `.cursor/mcp.json`, the generic
+ * `.mcp.json` Claude Code reads) describing the `lore` stdio server. These are
+ * inert until the user opts in — RAC does not auto-enable them (ADR-067).
+ */
+async function writeMcpConfigFiles(folder: vscode.WorkspaceFolder): Promise<void> {
+  const command = racBinaryFor(folder);
+  const server = {
+    command,
+    args: ["mcp", "--root", folder.uri.fsPath],
+  };
+  // Cursor reads `.cursor/mcp.json` ({ mcpServers: { … } }); Claude Code reads a
+  // project `.mcp.json` with the same shape. One payload, two destinations.
+  const payload = JSON.stringify({ mcpServers: { lore: server } }, null, 2) + "\n";
+  const targets = [
+    vscode.Uri.joinPath(folder.uri, ".cursor", "mcp.json"),
+    vscode.Uri.joinPath(folder.uri, ".mcp.json"),
+  ];
+  const encoder = new TextEncoder();
+  for (const uri of targets) {
+    try {
+      await vscode.workspace.fs.writeFile(uri, encoder.encode(payload));
+    } catch (err) {
+      log(`could not write MCP config ${uri.fsPath}`, err);
+    }
+  }
+}
+
+/**
+ * Watch the corpus and offer regeneration when an artifact changes, so the
+ * committed rules files do not silently drift (ADR-067). The watcher only
+ * *offers* — the user runs the regeneration, keeping the generated files an
+ * explicit, reviewable change.
+ */
+function watchCorpusForDrift(
+  context: vscode.ExtensionContext,
+  folder: vscode.WorkspaceFolder,
+): void {
+  agentRulesWatcher?.dispose();
+  const pattern = new vscode.RelativePattern(folder, "rac/**/*.md");
+  const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+  let pending: ReturnType<typeof setTimeout> | undefined;
+  let prompting = false;
+
+  const offerRegen = (): void => {
+    if (prompting) return;
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(() => {
+      prompting = true;
+      const REGEN = "Regenerate";
+      void vscode.window
+        .showInformationMessage(
+          "RAC: the corpus changed. Regenerate the agent rules files so they don't drift?",
+          REGEN,
+        )
+        .then((choice) => {
+          prompting = false;
+          if (choice === REGEN) void generateAgentRules(folder, { silent: true });
+        });
+    }, AWARENESS_DEBOUNCE_MS);
+  };
+
+  watcher.onDidChange(offerRegen);
+  watcher.onDidCreate(offerRegen);
+  watcher.onDidDelete(offerRegen);
+  agentRulesWatcher = watcher;
+  context.subscriptions.push(watcher);
+}
+
+/** Run `rac export --agent-rules` for a folder; report what was written. */
+async function generateAgentRules(
+  folder: vscode.WorkspaceFolder,
+  options: { silent?: boolean } = {},
+): Promise<boolean> {
+  try {
+    const result = await clientFor(folder).agentRules(folder.uri.fsPath, {
+      out: folder.uri.fsPath,
+    });
+    const changed = result.files.filter(
+      (f) => f.state === "written" || f.state === "updated",
+    );
+    if (!options.silent) {
+      const summary =
+        changed.length === 0
+          ? "agent rules already up to date"
+          : `agent rules updated (${changed.map((f) => f.path).join(", ")})`;
+      void vscode.window.showInformationMessage(`RAC: ${summary}.`);
+    }
+    return true;
+  } catch (err) {
+    if (err instanceof RacNotFoundError) {
+      warnMissingOnce();
+      return false;
+    }
+    log("agent-rules generation failed", err);
+    if (!options.silent) {
+      void vscode.window.showErrorMessage(
+        `RAC: could not generate agent rules: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    return false;
+  }
+}
+
+/**
+ * The "RAC: Set up agent integration" command. Detects which agent targets are
+ * present, generates the rules files via `rac`, registers the `lore` MCP server
+ * (and writes per-client MCP configs), starts a drift watcher, and ends with
+ * the first-run nudge (Initiative 3).
+ */
+async function setupAgentIntegration(context: vscode.ExtensionContext): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    void vscode.window.showErrorMessage("RAC: open a folder first, then set up agent integration.");
+    return;
+  }
+
+  // Detect present agent targets (for the report only — generation always writes
+  // all four so coverage is universal, ADR-067).
+  const present: string[] = [];
+  for (const rel of ["CLAUDE.md", "AGENTS.md", ".cursor", ".github"]) {
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.joinPath(folder.uri, rel));
+      present.push(rel);
+    } catch {
+      // not present — generation will create it
+    }
+  }
+  log(`agent integration: detected ${present.length ? present.join(", ") : "no existing targets"}`);
+
+  if (!(await generateAgentRules(folder))) return;
+
+  const mcpRegistered = registerLoreMcp(context, folder);
+  await writeMcpConfigFiles(folder);
+  watchCorpusForDrift(context, folder);
+
+  // First-run nudge (Initiative 3): point the user at the first MCP moment.
+  const mcpHint = mcpRegistered
+    ? "Enable the `lore` MCP server when your editor prompts, then ask your agent: "
+    : "Your agent now sees the rules files. Once `lore` MCP is enabled, ask your agent: ";
+  void vscode.window.showInformationMessage(
+    `RAC: agent integration ready. ${mcpHint}"what did we decide about X?"`,
+  );
 }

@@ -8,6 +8,7 @@
 import { RacExecError, RacNotFoundError, RacOutputError } from "./errors.js";
 import { defaultRunner, type RacRunner, type RunResult } from "./runner.js";
 import type {
+  AgentRulesResult,
   CorpusExport,
   CreatedArtifact,
   DirectoryValidation,
@@ -166,6 +167,29 @@ export class RacClient {
     if (result.code !== 0) {
       throw new RacExecError(args, result.code, result.stderr);
     }
+  }
+
+  /**
+   * `rac export <dir> --agent-rules [--check] --json` — generate (or, with
+   * `check`, verify) the drift-guarded per-client agent-context files
+   * (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules`, `.github/copilot-instructions.md`)
+   * distilled from the live corpus (ADR-067). The engine owns all logic; this
+   * client only shells the command and deserializes the result (ADR-063).
+   *
+   * `out` sets the output root (default: the corpus's repo root). `clients`
+   * restricts the targets. Under `check`, a non-zero exit (drift) is expected
+   * and surfaced through `result.files[].state` ("stale" / "missing") rather
+   * than thrown — `json()` returns the payload on exit code 1.
+   */
+  agentRules(
+    directory: string,
+    options: { out?: string; check?: boolean; clients?: string[] } = {},
+  ): Promise<AgentRulesResult> {
+    const args = ["export", directory, "--agent-rules", "--json"];
+    if (options.check) args.push("--check");
+    if (options.out !== undefined) args.push("--out", options.out);
+    for (const client of options.clients ?? []) args.push("--client", client);
+    return this.json<AgentRulesResult>(args);
   }
 
   /** `rac --version` — the installed RAC version string. */

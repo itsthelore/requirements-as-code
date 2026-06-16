@@ -245,3 +245,22 @@ export interface CorpusExport {
   artifacts: ExportArtifact[];
   relationships: ExportRelationship[];
 }
+
+/** One target file's outcome in an agent-rules generate or check run (v0.21.15). */
+export interface AgentRulesFile {
+  client: string;
+  path: string;
+  /** "written" | "updated" | "in-sync" | "stale" | "missing". */
+  state: string;
+}
+
+/** The result of `rac export --agent-rules [--check] --json` (ADR-067). */
+export interface AgentRulesResult {
+  /** "generate" or "check". */
+  mode: string;
+  /** sha256 of the live projection — the freshness signal, not a timestamp. */
+  digest: string;
+  /** The output root the per-client files were written to / checked under. */
+  root: string;
+  files: AgentRulesFile[];
+}
