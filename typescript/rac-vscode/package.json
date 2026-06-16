@@ -64,6 +64,10 @@
         "title": "RAC: What did we decide about…?"
       },
       {
+        "command": "rac.renameArtifact",
+        "title": "RAC: Rename artifact id"
+      },
+      {
         "command": "rac.enableClaudePreEditHook",
         "title": "RAC: Enable Claude Code pre-edit hook"
       },

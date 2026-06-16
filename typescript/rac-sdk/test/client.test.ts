@@ -8,6 +8,7 @@ import {
 } from "../src/errors.js";
 import type { RacRunner, RunResult } from "../src/runner.js";
 import { isResolved } from "../src/types.js";
+import type { RenamePlan, RenameResult } from "../src/types.js";
 
 /** A fake runner that records the args/stdin it was called with and returns canned output. */
 function fakeRunner(
@@ -204,6 +205,111 @@ describe("schema", () => {
     expect(result.required).toEqual(["problem", "requirements"]);
     expect(result.descriptions.problem).toBe("the problem");
     expect(calls[0]).toEqual(["schema", "requirement", "--json"]);
+  });
+});
+
+describe("rename", () => {
+  it("dry-runs (no --apply) and parses the plan", async () => {
+    const { runner, calls } = fakeRunner({
+      stdout: JSON.stringify({
+        directory: "rac",
+        recursive: true,
+        old_ref: "ADR-001",
+        new_ref: "ADR-007",
+        ok: true,
+        reason: null,
+        target_path: "rac/decisions/adr-001.md",
+        identity_field: "id",
+        files_changed: 2,
+        reference_edits: 3,
+        identity_edits: 1,
+        edits: [
+          {
+            path: "rac/decisions/adr-001.md",
+            line: 1,
+            old_line: "id: ADR-001",
+            new_line: "id: ADR-007",
+            kind: "identity",
+          },
+          {
+            path: "rac/roadmaps/v0.1.0.md",
+            line: 42,
+            old_line: "- ADR-001",
+            new_line: "- ADR-007",
+            kind: "reference",
+          },
+        ],
+      }),
+    });
+    const result = (await new RacClient({ runner }).rename(
+      "ADR-001",
+      "ADR-007",
+      "rac",
+    )) as RenamePlan;
+    expect(result.ok).toBe(true);
+    expect(result.files_changed).toBe(2);
+    expect(result.reference_edits).toBe(3);
+    expect(result.identity_edits).toBe(1);
+    expect(result.edits[0]?.kind).toBe("identity");
+    expect(result.edits[1]?.line).toBe(42);
+    expect(calls[0]).toEqual(["rename", "ADR-001", "ADR-007", "rac", "--json"]);
+  });
+
+  it("appends --apply when options.apply is set and parses the result", async () => {
+    const { runner, calls } = fakeRunner({
+      stdout: JSON.stringify({
+        directory: "rac",
+        old_ref: "ADR-001",
+        new_ref: "ADR-007",
+        applied: true,
+        target_path: "rac/decisions/adr-007.md",
+        files_changed: 2,
+        reference_edits: 3,
+        identity_edits: 1,
+      }),
+    });
+    const result = (await new RacClient({ runner }).rename("ADR-001", "ADR-007", "rac", {
+      apply: true,
+    })) as RenameResult;
+    expect(result.applied).toBe(true);
+    expect(result.target_path).toBe("rac/decisions/adr-007.md");
+    expect(calls[0]).toEqual([
+      "rename",
+      "ADR-001",
+      "ADR-007",
+      "rac",
+      "--json",
+      "--apply",
+    ]);
+  });
+
+  it("returns the parsed plan on a refusal (ok:false, exit code 1)", async () => {
+    const { runner, calls } = fakeRunner({
+      code: 1,
+      stdout: JSON.stringify({
+        directory: "rac",
+        recursive: true,
+        old_ref: "ADR-999",
+        new_ref: "ADR-007",
+        ok: false,
+        reason: "old-ref-not-found",
+        target_path: null,
+        identity_field: null,
+        files_changed: 0,
+        reference_edits: 0,
+        identity_edits: 0,
+        edits: [],
+      }),
+    });
+    const result = (await new RacClient({ runner }).rename(
+      "ADR-999",
+      "ADR-007",
+      "rac",
+    )) as RenamePlan;
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("old-ref-not-found");
+    expect(result.edits).toEqual([]);
+    expect(calls[0]).toEqual(["rename", "ADR-999", "ADR-007", "rac", "--json"]);
   });
 });
 

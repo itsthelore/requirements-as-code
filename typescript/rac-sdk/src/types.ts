@@ -246,6 +246,53 @@ export interface CorpusExport {
   relationships: ExportRelationship[];
 }
 
+// --- rac rename <old-id> <new-id> <dir> --json (v0.21.18) -------------------
+
+/** One concrete line rewrite in a rename plan. */
+export interface RenameEdit {
+  path: string;
+  /** 1-based line number of the edited line. */
+  line: number;
+  old_line: string;
+  new_line: string;
+  /** "reference" — a declared link to the artifact; "identity" — the id field on the artifact itself. */
+  kind: "reference" | "identity";
+}
+
+/**
+ * The dry-run plan of `rac rename … --json` (no `--apply`). `ok` is false on a
+ * refusal, with `reason` set to one of: "old-ref-not-found",
+ * "old-ref-ambiguous", "new-ref-invalid", "new-ref-collides",
+ * "old-ref-filename-only". The engine computes the edit set; the client never
+ * does (ADR-063).
+ */
+export interface RenamePlan {
+  directory: string;
+  recursive: boolean;
+  old_ref: string;
+  new_ref: string;
+  ok: boolean;
+  reason: string | null;
+  target_path: string | null;
+  identity_field: string | null;
+  files_changed: number;
+  reference_edits: number;
+  identity_edits: number;
+  edits: RenameEdit[];
+}
+
+/** The applied result of `rac rename … --apply --json`. */
+export interface RenameResult {
+  directory: string;
+  old_ref: string;
+  new_ref: string;
+  applied: boolean;
+  target_path: string | null;
+  files_changed: number;
+  reference_edits: number;
+  identity_edits: number;
+}
+
 /** One target file's outcome in an agent-rules generate or check run (v0.21.15). */
 export interface AgentRulesFile {
   client: string;
