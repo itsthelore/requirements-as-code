@@ -72,7 +72,13 @@ nothing to them beyond the cross-cutting frame above.
 For roadmap and design, investigate whether a community authority worth
 aligning to exists at all. If one does, record it as a new per-authority
 design under `rac/designs/community-alignment/`; if none does, record that
-finding so the question is not reopened without cause.
+finding so the question is not reopened without cause. **Done:** the
+`roadmap-design-authority-survey` design records the result — neither family
+has a qualifying authority (roadmap is dominated by methodologies and one
+low-adoption schema; design has only whole-system frameworks and
+project-specific RFC patterns, no cross-community per-artifact standard) — with
+explicit reopen conditions. Both families stay RAC-native until a qualifying
+standard emerges.
 
 ### Initiative 4 — Ecosystem presence and dogfooding
 
@@ -141,6 +147,7 @@ stays behind the growth-programme's GATE-1.
 ## Related Designs
 
 - madr-decision-alignment
+- roadmap-design-authority-survey
 - per-type-standards-checks
 
 ## Related Roadmaps
