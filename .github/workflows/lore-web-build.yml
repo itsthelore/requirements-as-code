@@ -36,6 +36,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run viewer tests
+        run: npm test
+
       - name: Design-system gate — no hex literals outside tokens.css
         run: |
           if grep -rn '#[0-9a-fA-F]\{3,8\}' src/ index.html viewer/index.html demo/index.html \
