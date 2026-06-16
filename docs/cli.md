@@ -285,6 +285,76 @@ for the issue codes `--validate` reports.
 
 ---
 
+## rename
+
+Safely rename an artifact id across the whole corpus. Renaming an id by hand
+corrupts links — every inbound reference to the old id silently dangles. `rac
+rename` computes the corpus-wide edit set deterministically and reversibly, so the
+references and the artifact's own identity move together. The engine owns the edit
+set; editors and other clients preview and invoke it, never computing references
+themselves (ADR-063).
+
+- **Input:** `rac rename <old-id> <new-id> <directory>` — the existing id (or one
+  of its aliases), the new human id (e.g. `ADR-099`), and the corpus to scan.
+- **Options:** `--apply` (write the edits; default is a dry-run preview) · `--json`
+  (the stable plan/result contract, ADR-007) · `--top-level`
+- **Exit codes:** `0` a valid plan was previewed (dry run) or applied · `1` the
+  rename was **refused** (`old-id` not found or ambiguous, `new-id` invalid or
+  colliding, or `old-id` is only a filename-derived alias) — nothing is written ·
+  `2` not a directory
+
+```bash
+rac rename ADR-001 ADR-099 rac/            # dry run — preview the edit set
+rac rename ADR-001 ADR-099 rac/ --apply    # apply it; references + identity move together
+rac rename ADR-001 ADR-099 rac/ --json     # the plan as a stable dict
+```
+
+**What it rewrites.** Two things, deterministically:
+
+1. **Inbound references** — every `## Related X` / `## Supersedes` list line whose
+   reference token equals `old-id`. Only the token is replaced; surrounding text is
+   preserved verbatim, so `- ADR-001 (blocked)` becomes `- ADR-099 (blocked)` (the
+   raw reference text is the source of truth, ADR-016). A line that names a
+   *different* alias of the same target is left untouched — the rename operates on
+   the `old-id` token specifically.
+2. **The target's own identity** — the one declared, editable identity field that
+   equals `old-id`: the canonical frontmatter `id`, a `## ID` section value, or the
+   type's declared id section. The file is **not** renamed and the canonical
+   frontmatter `id` is changed only when `old-id` *is* that value.
+
+**When it refuses.** If `old-id` resolves only through a filename-derived alias
+(the filename prefix or stem) there is no in-file token to rewrite without renaming
+the file, which is out of scope — so the rename refuses rather than leave `new-id`
+dangling. It also refuses an `old-id` that is unknown or ambiguous, and a `new-id`
+that is malformed or already names another artifact (which would create a duplicate
+identity). Every refusal leaves the corpus untouched and exits `1`.
+
+**Guarantees.**
+
+- **Deterministic** — the same inputs produce a byte-identical plan; edits are
+  ordered by path then line (ADR-002).
+- **Reversible** — applying `rename <new> <old>` after a rename restores the
+  original bytes. No semantic inference happens anywhere.
+- **Clean afterwards** — after `--apply`, `rac relationships <dir> --validate` is
+  clean: every inbound reference resolves to the renamed artifact.
+
+The `--json` plan is `{ ok, reason, old_ref, new_ref, target_path,
+identity_field, files_changed, reference_edits, identity_edits, edits[] }`, where
+each edit is `{ path, line, old_line, new_line, kind }` (`kind` is `"reference"` or
+`"identity"`). On refusal, `ok` is `false` and `reason` is one of the stable codes
+`old-ref-not-found`, `old-ref-ambiguous`, `new-ref-invalid`, `new-ref-collides`,
+`old-ref-filename-only`. The `--apply` result is `{ applied, old_ref, new_ref,
+target_path, files_changed, reference_edits, identity_edits }`.
+
+In the editor, **RAC: Rename artifact id** runs this dry run, shows the affected
+files and lines as a preview, and on confirm applies it — the extension previews
+and invokes the engine plan, it never computes references (ADR-063). The
+**add relationship** code action inserts a resolvable reference into the right
+`## Related X` section, and the missing-section quick-fix bodies are sourced from
+`rac schema <type>` so they cannot drift from the canonical schema.
+
+---
+
 ## review
 
 Review an entire repository in one command: validate every artifact, check
