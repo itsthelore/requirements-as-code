@@ -165,6 +165,7 @@ export function layout(
   const index = new Map(nodes.map((node, i) => [node.id, i]));
   const iters = iterations ?? Math.round(Math.max(90, Math.min(320, 5200 / Math.sqrt(n))));
   const disp = nodes.map(() => ({ x: 0, y: 0 }));
+  const margin = Math.min(width, height) * 0.04;
   let temp = Math.min(width, height) * 0.12;
   const cool = temp / (iters + 1);
 
@@ -215,12 +216,16 @@ export function layout(
       disp[i].x += (cx - nodes[i].x) * 0.02;
       disp[i].y += (cy - nodes[i].y) * 0.02;
     }
-    // integrate, capped by the cooling temperature
+    // integrate, capped by the cooling temperature, and keep nodes inside the
+    // frame (classic FR containment) so the graph stays compact and the
+    // fit-to-view scale is sensible rather than zoomed far out.
     for (let i = 0; i < n; i++) {
       const len = Math.sqrt(disp[i].x * disp[i].x + disp[i].y * disp[i].y) || 0.01;
       const m = Math.min(len, temp);
       nodes[i].x += (disp[i].x / len) * m;
       nodes[i].y += (disp[i].y / len) * m;
+      nodes[i].x = Math.min(width - margin, Math.max(margin, nodes[i].x));
+      nodes[i].y = Math.min(height - margin, Math.max(margin, nodes[i].y));
     }
     temp = Math.max(temp - cool, 0.01);
   }
