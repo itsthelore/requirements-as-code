@@ -4,7 +4,24 @@
   "description": "Inline validation for RAC (requirements-as-code) artifacts, powered by the rac CLI.",
   "version": "0.1.0",
   "publisher": "rac",
+  "icon": "icon.png",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/itsthelore/requirements-as-code.git",
+    "directory": "typescript/rac-vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/itsthelore/requirements-as-code/issues"
+  },
+  "keywords": [
+    "rac",
+    "requirements-as-code",
+    "requirements",
+    "decisions",
+    "adr",
+    "linter"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -14,7 +31,7 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onLanguage:markdown"
+    "workspaceContains:**/.rac/config.yaml"
   ],
   "contributes": {
     "commands": [

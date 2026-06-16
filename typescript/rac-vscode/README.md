@@ -49,6 +49,10 @@ reimplementing it ([ADR-063](../../rac/decisions/adr-063-non-python-clients-are-
 Only Markdown files with a leading `schema_version` frontmatter block are
 treated as RAC artifacts, so ordinary Markdown stays untouched.
 
+The extension activates only in RAC workspaces (those with a `.rac/config.yaml`),
+caches `rac` lookups (cleared on save) to stay responsive, warns once on `rac`
+schema-version skew, and logs to a "RAC" output channel.
+
 ## Settings
 
 | Setting | Default | Meaning |
