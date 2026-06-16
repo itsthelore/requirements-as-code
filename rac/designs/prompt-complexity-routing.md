@@ -148,6 +148,7 @@ handle the prompt.
 
 ## Related Decisions
 
+- adr-069
 - adr-068
 - adr-002
 - adr-034
@@ -156,3 +157,4 @@ handle the prompt.
 ## Related Roadmaps
 
 - complexity-based-model-routing
+- wayfinder-extraction

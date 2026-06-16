@@ -9,6 +9,10 @@ type: decision
 
 Proposed
 
+The product home for this capability is now Wayfinder, a separate product
+(ADR-069). This boundary carries into Wayfinder unchanged; `rac route` remains in
+RAC only until Wayfinder ships.
+
 ## Category
 
 Architecture
@@ -143,6 +147,7 @@ inference to the caller, is selected.
 
 ## Related Decisions
 
+- adr-069
 - adr-002
 - adr-034
 - adr-035

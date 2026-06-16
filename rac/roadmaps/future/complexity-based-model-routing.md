@@ -9,7 +9,9 @@ type: roadmap
 
 Planned
 
-Unscheduled — captured as future intent, not yet on a release.
+Unscheduled — captured as future intent, not yet on a release. The product home
+for this capability is now Wayfinder, a separate product (ADR-069); the
+`wayfinder-extraction` roadmap sequences moving it out of RAC.
 
 ## Context
 
@@ -140,6 +142,7 @@ capability without a RAC release.
 
 ## Related Decisions
 
+- adr-069
 - adr-068
 - adr-002
 - adr-034
@@ -148,3 +151,7 @@ capability without a RAC release.
 ## Related Designs
 
 - prompt-complexity-routing
+
+## Related Roadmaps
+
+- wayfinder-extraction
