@@ -11,5 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "comment": "src/test (the @vscode/test-electron suite) is excluded here and built separately via tsconfig.test.json to CommonJS.",
+  "exclude": ["src/test"]
 }
