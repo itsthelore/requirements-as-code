@@ -208,6 +208,54 @@ describe("exportHtml", () => {
   });
 });
 
+describe("agentRules", () => {
+  it("generates and parses the per-client file states", async () => {
+    const { runner, calls } = fakeRunner({
+      stdout: JSON.stringify({
+        mode: "generate",
+        digest: "abc123",
+        root: "/w",
+        files: [
+          { client: "claude", path: "CLAUDE.md", state: "written" },
+          { client: "agents", path: "AGENTS.md", state: "in-sync" },
+        ],
+      }),
+    });
+    const result = await new RacClient({ runner }).agentRules("rac", { out: "/w" });
+    expect(result.mode).toBe("generate");
+    expect(result.digest).toBe("abc123");
+    expect(result.files[0]?.state).toBe("written");
+    expect(calls[0]).toEqual(["export", "rac", "--agent-rules", "--json", "--out", "/w"]);
+  });
+
+  it("passes --check and restricts clients, returning drift on exit 1", async () => {
+    const { runner, calls } = fakeRunner({
+      code: 1,
+      stdout: JSON.stringify({
+        mode: "check",
+        digest: "def456",
+        root: "/w",
+        files: [{ client: "claude", path: "CLAUDE.md", state: "stale" }],
+      }),
+    });
+    const result = await new RacClient({ runner }).agentRules("rac", {
+      check: true,
+      clients: ["claude"],
+    });
+    expect(result.mode).toBe("check");
+    expect(result.files[0]?.state).toBe("stale");
+    expect(calls[0]).toEqual([
+      "export",
+      "rac",
+      "--agent-rules",
+      "--json",
+      "--check",
+      "--client",
+      "claude",
+    ]);
+  });
+});
+
 describe("error mapping", () => {
   it("raises RacNotFoundError when the binary cannot be spawned", async () => {
     const runner: RacRunner = async () => {

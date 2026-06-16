@@ -68,4 +68,6 @@ export type {
   ExportArtifact,
   ExportRelationship,
   CorpusExport,
+  AgentRulesFile,
+  AgentRulesResult,
 } from "./types.js";

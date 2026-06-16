@@ -52,6 +52,10 @@
       {
         "command": "rac.setupWorkspace",
         "title": "RAC: Set Up Workspace"
+      },
+      {
+        "command": "rac.setupAgentIntegration",
+        "title": "RAC: Set Up Agent Integration"
       }
     ],
     "walkthroughs": [
