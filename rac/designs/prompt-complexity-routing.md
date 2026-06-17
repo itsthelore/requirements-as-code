@@ -15,7 +15,7 @@ type: design
 This design is the *how* for the `complexity-based-model-routing` future
 roadmap item: a deterministic way to score a prompt's complexity and recommend
 a `local` or `cloud` model, without RAC ever calling a model. The boundary it
-implements is ADR-068; the determinism and AI-optional posture it inherits are
+implements is ADR-070; the determinism and AI-optional posture it inherits are
 ADR-002 and ADR-034; the rule that RAC never owns inference is ADR-035.
 
 The mechanism already exists in spirit. `core/classification.py` scores a
@@ -94,7 +94,7 @@ caller can see *why* — and recalibrate — rather than trust an opaque verdict
 RAC stops at the recommendation. It does not invoke a model, select a provider
 or model, read a credential, or tokenize per a vendor model. The caller maps
 `local`/`cloud` onto its own configured endpoints and runs inference. This is
-the ADR-068 line, drawn here so the surface cannot quietly grow a model call.
+the ADR-070 line, drawn here so the surface cannot quietly grow a model call.
 
 ## Constraints
 
@@ -154,7 +154,7 @@ handle the prompt.
 ## Related Decisions
 
 - adr-069
-- adr-068
+- adr-070
 - adr-002
 - adr-034
 - adr-035

@@ -3,7 +3,7 @@ schema_version: 1
 id: RAC-KV8WY8XAJ55S
 type: decision
 ---
-# ADR-068: Prompt-Complexity Routing Boundary
+# ADR-070: Prompt-Complexity Routing Boundary
 
 ## Status
 

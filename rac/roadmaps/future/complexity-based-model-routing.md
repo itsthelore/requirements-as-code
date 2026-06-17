@@ -38,7 +38,7 @@ So the honest split this item explores: RAC computes a reproducible complexity
 score over a prompt's structure and maps it to a `local`/`cloud` recommendation
 against a configurable threshold; the consuming agent or skill takes that
 recommendation and invokes its own configured model. RAC stops at the
-recommendation. The boundary is drawn in ADR-068; this item records the product
+recommendation. The boundary is drawn in ADR-070; this item records the product
 intent. It is considered, not scheduled — when scheduled it graduates out of
 `future/` into a versioned series and grows an implementation contract.
 
@@ -111,7 +111,7 @@ capability without a RAC release.
 - Per-vendor tokenization or a model-specific token count.
 - A semantic verdict on prompt difficulty, or any promise that the structural
   score predicts which model can actually handle the prompt — that correlation
-  is the caller's empirical calibration (see ADR-068).
+  is the caller's empirical calibration (see ADR-070).
 
 ## Success Measures
 
@@ -120,7 +120,7 @@ capability without a RAC release.
 - A stored Prompt artifact and the same text on stdin produce the same score.
 - Moving the configured threshold moves the `local`/`cloud` recommendation
   predictably, with no other behavior change.
-- Feature requests for an "LLM router" inside RAC are answered by ADR-068 rather
+- Feature requests for an "LLM router" inside RAC are answered by ADR-070 rather
   than by scope drift.
 
 ## Assumptions
@@ -136,16 +136,16 @@ capability without a RAC release.
 ## Risks
 
 - The score is mistaken for a capability verdict ("cloud means the prompt is too
-  hard for local"). Mitigation: ADR-068 names it a structural proxy; output
+  hard for local"). Mitigation: ADR-070 names it a structural proxy; output
   reports the contributing features so the recommendation is inspectable.
 - Pressure to "just add the model call" so `rac route` also runs the prompt.
-  Mitigation: ADR-068 makes invocation an explicit boundary RAC does not cross;
+  Mitigation: ADR-070 makes invocation an explicit boundary RAC does not cross;
   crossing it requires superseding the ADR, not drifting.
 
 ## Related Decisions
 
 - adr-069
-- adr-068
+- adr-070
 - adr-002
 - adr-034
 - adr-035
