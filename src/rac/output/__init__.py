@@ -8,6 +8,7 @@ without depending on the internal split between human/json/templates.
 
 from .github import render_watchkeeper_github, watchkeeper_annotations
 from .human import (
+    render_agent_rules_human,
     render_diff_human,
     render_dir_inspect_human,
     render_find_human,
@@ -26,6 +27,8 @@ from .human import (
     render_quickstart_human,
     render_relationship_validation_human,
     render_relationships_human,
+    render_rename_human,
+    render_rename_result_human,
     render_resolve_human,
     render_review_human,
     render_schema_human,
@@ -33,6 +36,7 @@ from .human import (
     render_skill_install_human,
     render_skill_list_human,
     render_stats_human,
+    render_stdin_corpus_human,
     render_templates_human,
     render_unknown_schema,
     render_validate_dir_human,
@@ -40,6 +44,7 @@ from .human import (
     render_watchkeeper_human,
 )
 from .json import (
+    render_agent_rules_json,
     render_diff_json,
     render_dir_inspect_json,
     render_export_json,
@@ -59,6 +64,8 @@ from .json import (
     render_quickstart_json,
     render_relationship_validation_json,
     render_relationships_json,
+    render_rename_json,
+    render_rename_result_json,
     render_resolve_json,
     render_review_json,
     render_schema_json,
@@ -66,6 +73,7 @@ from .json import (
     render_skill_install_json,
     render_skill_list_json,
     render_stats_json,
+    render_stdin_corpus_json,
     render_templates_json,
     render_validate_dir_json,
     render_validation_json,
@@ -82,6 +90,8 @@ from .sarif import (
 from .templates import render_improve_template, render_schema_template
 
 __all__ = [
+    "render_agent_rules_human",
+    "render_agent_rules_json",
     "render_diff_human",
     "render_diff_json",
     "render_find_human",
@@ -124,6 +134,10 @@ __all__ = [
     "render_relationships_human",
     "render_relationships_json",
     "render_relationships_sarif",
+    "render_rename_human",
+    "render_rename_json",
+    "render_rename_result_human",
+    "render_rename_result_json",
     "render_resolve_human",
     "render_resolve_json",
     "render_review_human",
@@ -140,6 +154,8 @@ __all__ = [
     "render_skill_list_json",
     "render_stats_human",
     "render_stats_json",
+    "render_stdin_corpus_human",
+    "render_stdin_corpus_json",
     "render_templates_human",
     "render_templates_json",
     "render_unknown_schema",

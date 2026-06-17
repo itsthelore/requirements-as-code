@@ -16,6 +16,14 @@ from rac.core.hooks import HookSpec
 from rac.core.models import Diff, Issue, Product
 from rac.core.schema import SchemaReference
 from rac.core.skills import SkillSpec
+from rac.services.agent_rules import (
+    STATE_IN_SYNC,
+    STATE_MISSING,
+    STATE_STALE,
+    STATE_UPDATED,
+    STATE_WRITTEN,
+    AgentRulesResult,
+)
 from rac.services.compare import (
     CHANGE_ADDED,
     CHANGE_MODIFIED,
@@ -48,6 +56,15 @@ from rac.services.relationships import (
     RelationshipReport,
     RelationshipValidation,
 )
+from rac.services.rename import (
+    REASON_NEW_COLLIDES,
+    REASON_NEW_INVALID,
+    REASON_OLD_AMBIGUOUS,
+    REASON_OLD_FILENAME_ONLY,
+    REASON_OLD_NOT_FOUND,
+    RenamePlan,
+    RenameResult,
+)
 from rac.services.resolve import ResolutionResult, SearchResult
 from rac.services.review import (
     PRIORITY_BROKEN_RELATIONSHIP,
@@ -59,7 +76,7 @@ from rac.services.review import (
 )
 from rac.services.skill import SkillInstallation
 from rac.services.stats import PortfolioStats
-from rac.services.validate import STATUS_INVALID, DirectoryValidation
+from rac.services.validate import STATUS_INVALID, DirectoryValidation, StdinCorpusValidation
 from rac.services.watchkeeper import WatchkeeperReport
 
 from ._shared import _UNKNOWN_MESSAGE, _unsupported_message
@@ -126,6 +143,48 @@ def render_validation_human(product: Product, issues: list[Issue]) -> str:
 
     lines.append("")
     lines.append(f"{len(errors)} error(s), {len(warnings)} warning(s).")
+    return "\n".join(lines)
+
+
+def render_stdin_corpus_human(result: StdinCorpusValidation) -> str:
+    """Human-readable `rac validate - --corpus` output (v0.21.17, ADR-067).
+
+    Renders the proposed document's structural findings exactly as single-file
+    ``rac validate`` does, then appends the corpus-resolved relationship findings
+    (references to retired or missing decisions) under their own heading. Both
+    contribute to the verdict; either alone fails the run. The reason text is the
+    finding the generated Claude Code pre-edit hook surfaces when it blocks.
+    """
+    file = result.source_path or "<input>"
+    errors = [i for i in result.structural_issues if i.severity == "error"]
+    warnings = [i for i in result.structural_issues if i.severity == "warning"]
+    rels = result.relationship_issues
+
+    lines: list[str] = []
+    lines.append(_green(_bold(f"PASS  {file}")) if result.ok else _red(_bold(f"FAIL  {file}")))
+
+    for issue in errors:
+        lines.append(f"  {_red('error')}   [{issue.code}] {_loc(file, issue.line)}")
+        lines.append(f"          {issue.message}")
+    for issue in warnings:
+        lines.append(f"  {_yellow('warning')} [{issue.code}] {_loc(file, issue.line)}")
+        lines.append(f"          {issue.message}")
+
+    if rels:
+        lines += ["", _bold("Corpus references")]
+        current_section = None
+        for rel in rels:
+            if rel.relationship != current_section:
+                current_section = rel.relationship
+                lines.append(f"  {_relationship_label(rel.relationship or '')}:")
+            suffix = _REF_ISSUE_SUFFIX.get(rel.code, rel.code)
+            lines.append(_red(f"  ✗ {rel.target} {suffix}"))
+
+    lines.append("")
+    lines.append(
+        f"{len(errors)} error(s), {len(warnings)} warning(s), "
+        f"{len(rels)} corpus reference finding(s)."
+    )
     return "\n".join(lines)
 
 
@@ -1185,3 +1244,117 @@ def render_watchkeeper_human(report: WatchkeeperReport) -> str:
         lines.append(f"  {_green('✓ Nothing requiring attention.')}")
 
     return "\n".join(lines)
+
+
+# Per-file state icons for `rac export --agent-rules` (v0.21.15). A drift state
+# (stale/missing under --check) is the red failure; a write/update is a neutral
+# bullet; in-sync is the green clear.
+_AGENT_RULES_ICONS = {
+    STATE_WRITTEN: lambda: "+",
+    STATE_UPDATED: lambda: "~",
+    STATE_IN_SYNC: lambda: _green("✓"),
+    STATE_STALE: lambda: _red("✗"),
+    STATE_MISSING: lambda: _red("✗"),
+}
+
+
+def render_agent_rules_human(result: AgentRulesResult) -> str:
+    """Human-readable `rac export --agent-rules [--check]` output (v0.21.15).
+
+    Lists each target file with its outcome — written/updated/in-sync for a
+    generate run, in-sync/stale/missing for a check run — then a verdict line.
+    Under --check, drift (any stale or missing block) is the red failure the CLI
+    turns into a non-zero exit (the vendored-shell drift gate, ADR-067).
+    """
+    checking = result.mode == "check"
+    title = "Agent Rules — drift check" if checking else "Agent Rules"
+    lines = [
+        _bold(title),
+        "=" * len(title),
+        "",
+        f"Corpus digest: {result.digest}",
+        f"Output root:   {result.root}",
+        "",
+    ]
+    for f in result.files:
+        icon = _AGENT_RULES_ICONS.get(f.state, lambda: "·")()
+        lines.append(f"  {icon} {f.path}  [{f.state}]")
+
+    lines.append("")
+    if checking:
+        if result.drifted:
+            stale = [f.path for f in result.files if f.state in (STATE_STALE, STATE_MISSING)]
+            lines.append(_red(f"✗ Drift — {len(stale)} file(s) stale or missing the block."))
+            lines.append("  Regenerate: rac export --agent-rules")
+        else:
+            lines.append(_green("✓ In sync — every present target matches the corpus."))
+    else:
+        written = sum(1 for f in result.files if f.state in (STATE_WRITTEN, STATE_UPDATED))
+        if written:
+            lines.append(_green(f"✓ Wrote/updated {written} file(s)."))
+        else:
+            lines.append(_green("✓ All targets already in sync — nothing to write."))
+    return "\n".join(lines)
+
+
+# --- rename ------------------------------------------------------------------
+
+# Human-readable reasons for a refused/empty rename plan, keyed by the stable
+# REASON_* codes the engine emits. The CLI exit code is decided separately.
+_RENAME_REASONS = {
+    REASON_OLD_NOT_FOUND: "no artifact resolves to that id",
+    REASON_OLD_AMBIGUOUS: "the id is ambiguous — it resolves to more than one artifact",
+    REASON_NEW_COLLIDES: "the new id already names another artifact",
+    REASON_NEW_INVALID: "the new id is not a valid identifier",
+    REASON_OLD_FILENAME_ONLY: (
+        "the id is only a filename-derived alias — there is no in-file identity to "
+        "rewrite, and renaming files is out of scope"
+    ),
+}
+
+
+def render_rename_human(plan: RenamePlan) -> str:
+    """Render a rename plan as a reviewable preview (dry run) or refusal."""
+    header = f"Rename {plan.old_ref} -> {plan.new_ref}"
+    if not plan.ok:
+        reason = _RENAME_REASONS.get(plan.reason or "", plan.reason or "unknown")
+        return "\n".join([header, "", _red(f"✗ Refused: {reason}.")])
+
+    lines = [header, "=" * len(header), ""]
+    lines.append(f"Target: {plan.target_path}  (identity field: {plan.identity_field})")
+    lines.append(
+        f"{plan.reference_edits} inbound reference(s), "
+        f"{plan.identity_edits} identity edit across {plan.files_changed} file(s)."
+    )
+    lines.append("")
+    current: str | None = None
+    for edit in plan.edits:
+        if edit.path != current:
+            current = edit.path
+            lines.append(f"  {edit.path}")
+        # Show each edit as a diff hunk anchored to the 1-based line. The raw line
+        # text is shown verbatim (not re-marked), so an existing Markdown "- "
+        # list marker reads naturally next to the diff's own ✗/✓ column.
+        lines.append(f"    L{edit.line} {_red('✗ ' + edit.old_line)}")
+        lines.append(f"    L{edit.line} {_green('✓ ' + edit.new_line)}")
+    lines.append("")
+    lines.append("Dry run — pass --apply to write these edits.")
+    return "\n".join(lines)
+
+
+def render_rename_result_human(result: RenameResult) -> str:
+    """Render the outcome of an applied rename."""
+    header = f"Rename {result.old_ref} -> {result.new_ref}"
+    if not result.applied:
+        return "\n".join([header, "", _red("✗ Nothing applied (the plan was refused).")])
+    return "\n".join(
+        [
+            header,
+            "",
+            _green(
+                f"✓ Applied: {result.reference_edits} reference(s) and "
+                f"{result.identity_edits} identity edit across "
+                f"{result.files_changed} file(s)."
+            ),
+        ]
+    )

@@ -56,7 +56,7 @@ jobs:
         # enforced by tests/test_ci_batteries.py in the core battery.
         battery:
           - name: core
-            paths: "tests/test_validate.py tests/test_okf_conformance.py tests/test_overrides.py tests/test_requirement_standards.py tests/test_sarif.py tests/test_parser.py tests/test_schema.py tests/test_identity.py tests/test_frontmatter.py tests/test_metadata_identity.py tests/test_idgen.py tests/test_ci_batteries.py tests/test_corpus.py tests/test_operations.py tests/test_sdk_surface.py tests/test_sbom.py"
+            paths: "tests/test_validate.py tests/test_validate_corpus_stdin.py tests/test_okf_conformance.py tests/test_overrides.py tests/test_requirement_standards.py tests/test_sarif.py tests/test_parser.py tests/test_schema.py tests/test_identity.py tests/test_frontmatter.py tests/test_metadata_identity.py tests/test_idgen.py tests/test_ci_batteries.py tests/test_corpus.py tests/test_operations.py tests/test_sdk_surface.py tests/test_sbom.py"
           - name: cli
             paths: "tests/test_cli.py"
           - name: compare
@@ -68,7 +68,7 @@ jobs:
           - name: diff
             paths: "tests/test_diff.py"
           - name: export
-            paths: "tests/test_export_cmd.py tests/test_export_okf.py"
+            paths: "tests/test_export_cmd.py tests/test_export_okf.py tests/test_agent_rules.py"
           - name: improve
             paths: "tests/test_improve.py"
           - name: index
@@ -88,15 +88,15 @@ jobs:
           - name: portfolio
             paths: "tests/test_portfolio.py"
           - name: repository
-            paths: "tests/test_repository.py tests/test_repository_perf.py"
+            paths: "tests/test_repository.py tests/test_repository_perf.py tests/test_gate_perf.py"
           - name: explorer
             paths: "tests/test_explorer_adapter.py tests/test_explorer_app.py tests/test_explorer_cli.py tests/test_explorer_commands.py tests/test_explorer_editor.py tests/test_explorer_isolation.py tests/test_explorer_workspace.py"
           - name: mcp
             paths: "tests/test_mcp_server.py tests/test_mcp_tools.py tests/test_mcp_isolation.py tests/test_mcp_telemetry.py tests/test_mcp_ping.py"
           - name: relationships
-            paths: "tests/test_relationships.py tests/test_relationships_cmd.py tests/test_relationship_validation.py tests/test_relationship_graph.py tests/test_lifecycle_status.py"
+            paths: "tests/test_relationships.py tests/test_relationships_cmd.py tests/test_relationship_validation.py tests/test_relationship_graph.py tests/test_lifecycle_status.py tests/test_rename.py"
           - name: resolve
-            paths: "tests/test_resolve.py"
+            paths: "tests/test_resolve.py tests/test_find_decisions.py"
           - name: review
             paths: "tests/test_review.py tests/test_cadence.py"
           - name: revisions

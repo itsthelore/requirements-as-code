@@ -15,6 +15,7 @@ from rac.core.hooks import HookSpec
 from rac.core.models import Diff, Issue, Product
 from rac.core.schema import SchemaReference
 from rac.core.skills import SkillSpec
+from rac.services.agent_rules import AgentRulesResult
 from rac.services.create import CreatedArtifact
 from rac.services.export import CorpusExport
 from rac.services.gate import GateReport
@@ -28,11 +29,12 @@ from rac.services.migrate import MigrationReport
 from rac.services.portfolio import PortfolioSummary
 from rac.services.quickstart import QuickstartResult
 from rac.services.relationships import RelationshipReport, RelationshipValidation
+from rac.services.rename import RenamePlan, RenameResult
 from rac.services.resolve import ResolutionResult, SearchResult
 from rac.services.review import ReviewReport
 from rac.services.skill import SkillInstallation
 from rac.services.stats import PortfolioStats
-from rac.services.validate import DirectoryValidation
+from rac.services.validate import DirectoryValidation, StdinCorpusValidation
 from rac.services.watchkeeper import WatchkeeperReport
 
 if TYPE_CHECKING:
@@ -55,6 +57,16 @@ def render_validation_json(product: Product, issues: list[Issue]) -> str:
 
 def render_validate_dir_json(result: DirectoryValidation) -> str:
     """JSON directory `rac validate` output (stable contract, ADR-007)."""
+    return json.dumps(result.to_dict(), indent=2)
+
+
+def render_stdin_corpus_json(result: StdinCorpusValidation) -> str:
+    """JSON `rac validate - --corpus` output (stable contract, ADR-007).
+
+    Additive over single-file `rac validate` JSON: the same ``file`` / ``valid`` /
+    ``errors`` / ``warnings`` keys, plus ``relationship_issues`` for the proposed
+    document's references resolved against the corpus (v0.21.17, ADR-067).
+    """
     return json.dumps(result.to_dict(), indent=2)
 
 
@@ -248,6 +260,19 @@ def render_relationship_validation_json(report: RelationshipValidation) -> str:
     return json.dumps(payload, indent=2)
 
 
+# --- rename ------------------------------------------------------------------
+
+
+def render_rename_json(plan: RenamePlan) -> str:
+    """The rename plan as the stable additive contract (ADR-007, v0.21.18)."""
+    return json.dumps(plan.to_dict(), indent=2)
+
+
+def render_rename_result_json(result: RenameResult) -> str:
+    """The applied-rename outcome as the stable additive contract (ADR-007)."""
+    return json.dumps(result.to_dict(), indent=2)
+
+
 # --- ingest ------------------------------------------------------------------
 
 
@@ -287,6 +312,15 @@ def render_export_json(export: CorpusExport) -> str:
     external viewers consume (ADR-014).
     """
     return json.dumps(export.to_dict(), indent=2)
+
+
+def render_agent_rules_json(result: AgentRulesResult) -> str:
+    """JSON `rac export --agent-rules [--check]` output (stable contract, ADR-007).
+
+    The editor and CI consume this: ``mode``, the corpus ``digest``, the output
+    ``root``, and per-target ``files`` with their ``state``.
+    """
+    return json.dumps(result.to_dict(), indent=2)
 
 
 # --- create (rac new / rac templates, v0.7.10) -------------------------------

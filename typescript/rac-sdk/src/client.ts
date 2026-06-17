@@ -8,6 +8,7 @@
 import { RacExecError, RacNotFoundError, RacOutputError } from "./errors.js";
 import { defaultRunner, type RacRunner, type RunResult } from "./runner.js";
 import type {
+  AgentRulesResult,
   CorpusExport,
   CreatedArtifact,
   DirectoryValidation,
@@ -17,6 +18,8 @@ import type {
   PortfolioStats,
   QuickstartResult,
   RelationshipValidation,
+  RenamePlan,
+  RenameResult,
   ResolveResult,
   ReviewReport,
   SchemaReference,
@@ -95,6 +98,20 @@ export class RacClient {
     return this.json<FindResult>(args);
   }
 
+  /**
+   * `rac find <topic> [dir] --decisions --json` — the live decision query
+   * (ADR-067): ranked *live* (Accepted, non-retired) decisions binding a topic,
+   * the "what did we decide about X / is X ruled out" retrieval. Structural only
+   * — the engine returns which decisions bind, never a verdict. An empty result
+   * is a valid answer, not an error.
+   */
+  findDecisions(topic: string, dir?: string): Promise<FindResult> {
+    const args = ["find", topic];
+    if (dir !== undefined) args.push(dir);
+    args.push("--decisions", "--json");
+    return this.json<FindResult>(args);
+  }
+
   /** `rac relationships <dir> --validate --json` — resolve declared references. */
   validateRelationships(
     directory: string,
@@ -127,6 +144,32 @@ export class RacClient {
   /** `rac schema <type> --json` — the canonical section/metadata reference for a type. */
   schema(artifactType: string): Promise<SchemaReference> {
     return this.json<SchemaReference>(["schema", artifactType, "--json"]);
+  }
+
+  /**
+   * `rac rename <old-id> <new-id> <dir> --json [--apply]` — rename an artifact
+   * id and rewrite every declared reference to it across the corpus (v0.21.18).
+   *
+   * Without `apply` this is a dry run returning a {@link RenamePlan}: the full
+   * edit set, or `ok: false` with a `reason` on a refusal. With `apply: true`
+   * the plan is written and a {@link RenameResult} is returned. The engine owns
+   * all reference discovery, validation, and editing; this client only shells
+   * the command and deserializes the result — it never computes the edit set or
+   * decides resolvability itself (ADR-063). The plan's stable `--json` shape is
+   * additive and `schema_version`-gated (ADR-007).
+   *
+   * A refusal exits non-zero (1); `json()` returns the parsed plan in that case,
+   * so a refusal surfaces through `plan.ok` / `plan.reason`, not a thrown error.
+   */
+  rename(
+    oldId: string,
+    newId: string,
+    directory: string,
+    options: { apply?: boolean } = {},
+  ): Promise<RenamePlan | RenameResult> {
+    const args = ["rename", oldId, newId, directory, "--json"];
+    if (options.apply) args.push("--apply");
+    return this.json<RenamePlan | RenameResult>(args);
   }
 
   /** `rac new <type> <path> --json` — scaffold a new artifact (never overwrites). */
@@ -166,6 +209,29 @@ export class RacClient {
     if (result.code !== 0) {
       throw new RacExecError(args, result.code, result.stderr);
     }
+  }
+
+  /**
+   * `rac export <dir> --agent-rules [--check] --json` — generate (or, with
+   * `check`, verify) the drift-guarded per-client agent-context files
+   * (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules`, `.github/copilot-instructions.md`)
+   * distilled from the live corpus (ADR-067). The engine owns all logic; this
+   * client only shells the command and deserializes the result (ADR-063).
+   *
+   * `out` sets the output root (default: the corpus's repo root). `clients`
+   * restricts the targets. Under `check`, a non-zero exit (drift) is expected
+   * and surfaced through `result.files[].state` ("stale" / "missing") rather
+   * than thrown — `json()` returns the payload on exit code 1.
+   */
+  agentRules(
+    directory: string,
+    options: { out?: string; check?: boolean; clients?: string[] } = {},
+  ): Promise<AgentRulesResult> {
+    const args = ["export", directory, "--agent-rules", "--json"];
+    if (options.check) args.push("--check");
+    if (options.out !== undefined) args.push("--out", options.out);
+    for (const client of options.clients ?? []) args.push("--client", client);
+    return this.json<AgentRulesResult>(args);
   }
 
   /** `rac --version` — the installed RAC version string. */

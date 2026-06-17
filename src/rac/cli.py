@@ -2,6 +2,7 @@
 
 Commands:
     rac validate <file.md | dir | -> [--json | --sarif] [--top-level]
+    rac validate <file.md | -> --corpus <dir> [--json]
     rac diff <old.md> <new.md> [--json]
     rac stats <directory> [--json]
     rac ingest <file> [-o OUT | --stdout] [--force] [--json]
@@ -9,6 +10,7 @@ Commands:
     rac improve <file.md | -> [--json | --template]
     rac schema [--list] [type] [--json | --template]
     rac relationships <dir | file.md> [--validate] [--json] [--top-level]
+    rac rename <old-id> <new-id> <directory> [--json] [--apply] [--top-level]
     rac review <directory> [--json] [--top-level]
     rac gate <directory> [--json | --sarif] [--top-level]
     rac watchkeeper [directory] [--base REF] [--head REF]
@@ -16,7 +18,8 @@ Commands:
                     [--no-annotate]
     rac portfolio <directory> [--json] [--top-level]
     rac index [directory] [--json] [--top-level]
-    rac export [directory] [--json | --html | --okf] [--out PATH]
+    rac export [directory] [--json | --html | --okf | --agent-rules [--check]]
+               [--client CLIENT ...] [--out PATH]
     rac explorer [directory] [--top-level]
     rac mcp [--root PATH] [--telemetry]
     rac mcp-stats [--json | --share]
@@ -95,6 +98,11 @@ from rac.core.templates import (
 )
 from rac.core.validation import has_errors
 from rac.output.portal import PortalSeamMissing, PortalShellMissing
+from rac.services.agent_rules import (
+    check_agent_rules,
+    generate_agent_rules,
+    unknown_clients,
+)
 from rac.services.create import (
     IdGenerationExhausted,
     MissingRepositoryConfig,
@@ -127,17 +135,23 @@ from rac.services.relationships import (
     validate_relationships,
     validate_relationships_file,
 )
+from rac.services.rename import apply_rename, compute_rename
 from rac.services.resolve import (
     OUTCOME_DUPLICATE,
     OUTCOME_RESOLVED,
     find_artifacts,
+    find_decisions,
     resolve_artifact,
 )
 from rac.services.review import DEFAULT_STALE_AFTER_DAYS, build_review
 from rac.services.revisions import NotAGitRepository, RevisionNotFound
 from rac.services.skill import SkillFileExists, install_skills
 from rac.services.stats import collect_stats
-from rac.services.validate import validate_directory, validate_product
+from rac.services.validate import (
+    validate_directory,
+    validate_product,
+    validate_stdin_against_corpus,
+)
 from rac.services.watchkeeper import build_watchkeeper_report
 
 from . import __version__
@@ -167,10 +181,18 @@ def _read_validate_input(target: str) -> Product:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
+    corpus = getattr(args, "corpus", None)
+
     # Directory? Validate every recognized artifact beneath it (v0.7.9).
     # Unknown-type files are skipped, matching `rac portfolio` semantics; the
     # legacy requirement fallback applies only to explicit single-file input.
     if args.file != "-" and Path(args.file).is_dir():
+        if corpus is not None:
+            # --corpus resolves *one proposed document* against a corpus; a
+            # directory target already validates every artifact in place, so the
+            # flag is redundant and ambiguous there (ADR-067, v0.21.17).
+            print("rac: --corpus applies to stdin ('-') or a single file", file=sys.stderr)
+            raise SystemExit(EXIT_USAGE)
         result = validate_directory(args.file, recursive=not args.top_level)
         if args.sarif:
             print(outputs.render_validate_sarif(result))
@@ -187,6 +209,25 @@ def cmd_validate(args: argparse.Namespace) -> int:
         raise SystemExit(EXIT_USAGE)
 
     product = _read_validate_input(args.file)
+
+    # Corpus-aware single-document validation (v0.21.17, ADR-067): structural
+    # findings *plus* the proposed document's references resolved against the
+    # live corpus. This is the seam the generated Claude Code pre-edit hook
+    # pipes proposed content into — a reference to a retired or missing decision
+    # blocks before the edit lands. Either a structural error or any corpus
+    # reference finding fails the run.
+    if corpus is not None:
+        if not Path(corpus).is_dir():
+            print(f"rac: --corpus is not a directory: {corpus}", file=sys.stderr)
+            raise SystemExit(EXIT_USAGE)
+        source_path = "-" if args.file == "-" else str(Path(args.file))
+        corpus_result = validate_stdin_against_corpus(product, corpus, source_path=source_path)
+        if args.json:
+            print(outputs.render_stdin_corpus_json(corpus_result))
+        else:
+            print(outputs.render_stdin_corpus_human(corpus_result))
+        return EXIT_OK if corpus_result.ok else EXIT_VALIDATION_FAILED
+
     start = "." if args.file == "-" else str(Path(args.file).parent)
     issues = validate_product(product, start)
     if args.json:
@@ -408,6 +449,51 @@ def cmd_relationships(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_rename(args: argparse.Namespace) -> int:
+    """Compute (and optionally apply) a corpus-wide artifact-id rename (v0.21.18).
+
+    Default is a dry run: it prints the planned edit set and exits 0 for any valid
+    plan (a preview always succeeds). An unresolvable/ambiguous OLD or an
+    invalid/colliding NEW is a refusal: it prints the reason and exits
+    EXIT_VALIDATION_FAILED (1) — the rename was rejected, not a usage error.
+    ``--apply`` writes the edits and reports what changed. The engine owns the
+    edit set (ADR-063); the CLI only renders and applies it.
+    """
+    directory = Path(args.directory)
+    if not directory.is_dir():
+        print(f"rac: not a directory: {args.directory}", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE)
+
+    plan = compute_rename(args.directory, args.old, args.new, recursive=not args.top_level)
+
+    if not plan.ok:
+        if args.json:
+            print(outputs.render_rename_json(plan))
+        else:
+            print(outputs.render_rename_human(plan), file=sys.stderr)
+        # Every refusal (unknown/ambiguous OLD, invalid/colliding NEW,
+        # filename-only alias) leaves the corpus untouched and exits 1 — the
+        # rename was rejected. EXIT_USAGE (2) is reserved for argument/IO errors
+        # like "not a directory" above, so a refused rename stays distinguishable
+        # from a misused command.
+        return EXIT_VALIDATION_FAILED
+
+    if not args.apply:
+        if args.json:
+            print(outputs.render_rename_json(plan))
+        else:
+            print(outputs.render_rename_human(plan))
+        # A valid dry-run preview always succeeds.
+        return EXIT_OK
+
+    result = apply_rename(plan)
+    if args.json:
+        print(outputs.render_rename_result_json(result))
+    else:
+        print(outputs.render_rename_result_human(result))
+    return EXIT_OK
+
+
 def cmd_review(args: argparse.Namespace) -> int:
     if not Path(args.directory).is_dir():
         print(f"rac: not a directory: {args.directory}", file=sys.stderr)
@@ -512,9 +598,42 @@ def cmd_index(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _agent_rules_root(directory: str, out: str | None) -> Path:
+    """The directory the agent-rules files are written into.
+
+    Explicit ``--out`` wins. Otherwise default to the corpus's repo root: the
+    parent of a ``rac/`` directory (so ``rac export rac/ --agent-rules`` writes
+    CLAUDE.md/AGENTS.md beside it), else the directory itself. A bare ``rac``
+    with no parent component falls back to the current directory.
+    """
+    if out is not None:
+        return Path(out)
+    path = Path(directory.rstrip("/"))
+    if path.name == "rac":
+        return path.parent if str(path.parent) not in ("", ".") else Path(".")
+    return path
+
+
 def cmd_export(args: argparse.Namespace) -> int:
     if not Path(args.directory).is_dir():
         print(f"rac: not a directory: {args.directory}", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE)
+
+    # Agent-rules is a distinct mode (ADR-067): a distilled, drift-guarded
+    # projection of live decisions into per-client managed blocks. It owns --out
+    # (the output root), --client (target selectors), --check (the drift gate),
+    # and --json (machine output) — none of the export-payload modes apply.
+    if args.agent_rules:
+        return _cmd_agent_rules(args)
+    if args.check:
+        print("rac: --check requires --agent-rules", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE)
+    if args.client:
+        print("rac: --client requires --agent-rules", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE)
+
+    if args.json and (args.html or args.okf):
+        print("rac: --json cannot combine with --html or --okf", file=sys.stderr)
         raise SystemExit(EXIT_USAGE)
     if args.out is not None and not (args.html or args.okf):
         print("rac: --out requires --html or --okf (--json writes to stdout)", file=sys.stderr)
@@ -559,6 +678,40 @@ def cmd_export(args: argparse.Namespace) -> int:
         raise SystemExit(EXIT_USAGE) from None
     edges = len(export.relationships)
     print(f"wrote {out} — {export.artifact_count} artifact(s), {edges} relationship(s)")
+    return EXIT_OK
+
+
+def _cmd_agent_rules(args: argparse.Namespace) -> int:
+    """`rac export --agent-rules [--check]` (v0.21.15, ADR-067).
+
+    Generates (or, under --check, verifies) the drift-guarded managed block in
+    each per-client agent-context file. --check never writes and exits non-zero
+    on drift (a stale or missing block) — the CI gate. Output is human by
+    default; --json emits the machine contract.
+    """
+    bad = unknown_clients(args.client)
+    if bad:
+        valid = "claude, agents, cursor, copilot"
+        print(f"rac: unknown --client: {', '.join(bad)} (choose from {valid})", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE)
+
+    root = _agent_rules_root(args.directory, args.out)
+    try:
+        if args.check:
+            result = check_agent_rules(args.directory, str(root), clients=args.client)
+        else:
+            result = generate_agent_rules(args.directory, str(root), clients=args.client)
+    except OSError as exc:
+        print(f"rac: cannot write under {root}: {exc}", file=sys.stderr)
+        raise SystemExit(EXIT_USAGE) from None
+
+    if args.json:
+        print(outputs.render_agent_rules_json(result))
+    else:
+        print(outputs.render_agent_rules_human(result))
+
+    if args.check and result.drifted:
+        return EXIT_VALIDATION_FAILED
     return EXIT_OK
 
 
@@ -664,17 +817,28 @@ def cmd_find(args: argparse.Namespace) -> int:
     if not Path(args.directory).is_dir():
         print(f"rac: not a directory: {args.directory}", file=sys.stderr)
         raise SystemExit(EXIT_USAGE)
-    result = find_artifacts(
-        args.directory,
-        args.query,
-        artifact_type=args.type,
-        recursive=not args.top_level,
-    )
+    if args.decisions:
+        # `--decisions` is the live decision query (ADR-067): it implies the
+        # decision type filter *and* restricts to live (Accepted, non-retired)
+        # decisions — the deterministic "what did we decide about X" retrieval.
+        # `--type` is redundant with it and mutually exclusive at the parser.
+        result = find_decisions(
+            args.directory,
+            args.query,
+            recursive=not args.top_level,
+        )
+    else:
+        result = find_artifacts(
+            args.directory,
+            args.query,
+            artifact_type=args.type,
+            recursive=not args.top_level,
+        )
     if args.json:
         print(outputs.render_find_json(result))
     else:
         print(outputs.render_find_human(result))
-    # An empty result is a valid outcome, not an error.
+    # An empty result is a valid outcome, not an error (a query always succeeds).
     return EXIT_OK
 
 
@@ -928,6 +1092,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Recurse into subdirectories (the default; accepted for clarity).",
     )
+    p_validate.add_argument(
+        "--corpus",
+        metavar="DIR",
+        help=(
+            "Resolve the proposed document's references against the corpus at DIR "
+            "(stdin '-' or a single file only). Reports references to retired or "
+            "missing decisions in addition to structural findings. Used by the "
+            "generated Claude Code pre-edit hook."
+        ),
+    )
     p_validate.set_defaults(func=cmd_validate)
 
     p_diff = sub.add_parser(
@@ -1081,6 +1255,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Recurse into subdirectories (the default; accepted for clarity).",
     )
     p_relationships.set_defaults(func=cmd_relationships)
+
+    p_rename = sub.add_parser(
+        "rename",
+        help="Safely rename an artifact id across the corpus (dry run; --apply writes).",
+        parents=[version_parent],
+    )
+    p_rename.add_argument("old", help="The existing artifact id (or alias) to rename.")
+    p_rename.add_argument("new", help="The new artifact id, e.g. ADR-099.")
+    p_rename.add_argument("directory", help="The corpus directory to scan.")
+    p_rename.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of human-readable text."
+    )
+    p_rename.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply the edit set to disk (default is a dry-run preview).",
+    )
+    p_rename.add_argument(
+        "--top-level",
+        action="store_true",
+        help="Only the directory's top-level files (no recursion).",
+    )
+    p_rename.set_defaults(func=cmd_rename)
 
     p_review = sub.add_parser(
         "review",
@@ -1257,11 +1454,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=".",
         help="Directory to scan recursively for *.md (default: current directory).",
     )
+    # --html / --okf / --agent-rules are the mutually-exclusive write modes; the
+    # default (none of them) writes the JSON payload to stdout. --json is *not*
+    # in this group: for the default mode it is the explicit no-op it always was,
+    # and for --agent-rules it toggles JSON vs human output (so --agent-rules
+    # --json is valid). --json with --html/--okf is rejected in cmd_export.
     export_mode = p_export.add_mutually_exclusive_group()
-    export_mode.add_argument(
+    p_export.add_argument(
         "--json",
         action="store_true",
-        help="Write the export JSON to stdout (the default; explicit for pipelines).",
+        help="Emit JSON instead of human-readable text (the default export mode "
+        "writes JSON to stdout regardless; with --agent-rules, selects JSON output).",
     )
     export_mode.add_argument(
         "--html",
@@ -1275,11 +1478,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write a derived OKF v0.1 bundle (one Markdown file per artifact, "
         "plus index.md and log.md) to a directory.",
     )
+    export_mode.add_argument(
+        "--agent-rules",
+        action="store_true",
+        help="Write per-client agent-context files (CLAUDE.md, AGENTS.md, "
+        ".cursor/rules, .github/copilot-instructions.md) with a drift-guarded "
+        "managed block distilled from live decisions (ADR-067).",
+    )
+    p_export.add_argument(
+        "--check",
+        action="store_true",
+        help="With --agent-rules: verify committed files match the corpus "
+        "without writing; exit non-zero on drift (the CI gate).",
+    )
+    p_export.add_argument(
+        "--client",
+        action="append",
+        choices=["claude", "agents", "cursor", "copilot"],
+        metavar="CLIENT",
+        help="With --agent-rules: restrict to specific clients "
+        "(claude|agents|cursor|copilot); repeatable. Default: all four.",
+    )
     p_export.add_argument(
         "--out",
         default=None,
-        help="Where --html writes the Portal (default: lore-export.html) or "
-        "--okf writes the bundle directory (default: okf-bundle). "
+        help="Where --html writes the Portal (default: lore-export.html), "
+        "--okf writes the bundle directory (default: okf-bundle), or "
+        "--agent-rules writes the per-client files (default: the corpus's repo "
+        "root — the parent of a rac/ directory). "
         "Exports are build artifacts: existing output is overwritten.",
     )
     p_export.set_defaults(func=cmd_export)
@@ -1477,9 +1703,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=".",
         help="Directory to scan recursively for *.md (default: current directory).",
     )
-    p_find.add_argument(
+    # `--type` and `--decisions` both narrow the search; `--decisions` is the
+    # live decision query (decision type + Accepted/non-retired filter), so the
+    # two are mutually exclusive (ADR-067).
+    find_scope = p_find.add_mutually_exclusive_group()
+    find_scope.add_argument(
         "--type",
         help="Only match artifacts of this type (requirement, decision, ...).",
+    )
+    find_scope.add_argument(
+        "--decisions",
+        action="store_true",
+        help=(
+            "Only live decisions (Accepted, non-retired) — the 'what did we "
+            "decide about X / is X ruled out' query (ADR-067)."
+        ),
     )
     p_find.add_argument(
         "--json", action="store_true", help="Emit JSON instead of human-readable text."

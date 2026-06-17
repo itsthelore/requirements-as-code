@@ -57,6 +57,9 @@ export type {
   FindResult,
   RelationshipIssue,
   RelationshipValidation,
+  RenameEdit,
+  RenamePlan,
+  RenameResult,
   ReviewIssue,
   ReviewReport,
   PortfolioStats,
@@ -68,4 +71,6 @@ export type {
   ExportArtifact,
   ExportRelationship,
   CorpusExport,
+  AgentRulesFile,
+  AgentRulesResult,
 } from "./types.js";

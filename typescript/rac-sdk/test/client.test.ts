@@ -8,6 +8,7 @@ import {
 } from "../src/errors.js";
 import type { RacRunner, RunResult } from "../src/runner.js";
 import { isResolved } from "../src/types.js";
+import type { RenamePlan, RenameResult } from "../src/types.js";
 
 /** A fake runner that records the args/stdin it was called with and returns canned output. */
 function fakeRunner(
@@ -134,6 +135,38 @@ describe("find", () => {
   });
 });
 
+describe("findDecisions", () => {
+  it("passes --decisions and parses the live decisions", async () => {
+    const { runner, calls } = fakeRunner({
+      stdout: JSON.stringify({
+        schema_version: "1",
+        query: "caching",
+        type: "decision",
+        match_count: 1,
+        matches: [{ id: "RAC-9", type: "decision", title: "Cache policy", path: "d.md" }],
+      }),
+    });
+    const result = await new RacClient({ runner }).findDecisions("caching", "rac");
+    expect(result.type).toBe("decision");
+    expect(result.matches[0].id).toBe("RAC-9");
+    expect(calls[0]).toEqual(["find", "caching", "rac", "--decisions", "--json"]);
+  });
+
+  it("omits the directory when not given", async () => {
+    const { runner, calls } = fakeRunner({
+      stdout: JSON.stringify({
+        schema_version: "1",
+        query: "x",
+        type: "decision",
+        match_count: 0,
+        matches: [],
+      }),
+    });
+    await new RacClient({ runner }).findDecisions("x");
+    expect(calls[0]).toEqual(["find", "x", "--decisions", "--json"]);
+  });
+});
+
 describe("validateRelationships", () => {
   it("parses relationship issues", async () => {
     const { runner, calls } = fakeRunner({
@@ -175,6 +208,111 @@ describe("schema", () => {
   });
 });
 
+describe("rename", () => {
+  it("dry-runs (no --apply) and parses the plan", async () => {
+    const { runner, calls } = fakeRunner({
+      stdout: JSON.stringify({
+        directory: "rac",
+        recursive: true,
+        old_ref: "ADR-001",
+        new_ref: "ADR-007",
+        ok: true,
+        reason: null,
+        target_path: "rac/decisions/adr-001.md",
+        identity_field: "id",
+        files_changed: 2,
+        reference_edits: 3,
+        identity_edits: 1,
+        edits: [
+          {
+            path: "rac/decisions/adr-001.md",
+            line: 1,
+            old_line: "id: ADR-001",
+            new_line: "id: ADR-007",
+            kind: "identity",
+          },
+          {
+            path: "rac/roadmaps/v0.1.0.md",
+            line: 42,
+            old_line: "- ADR-001",
+            new_line: "- ADR-007",
+            kind: "reference",
+          },
+        ],
+      }),
+    });
+    const result = (await new RacClient({ runner }).rename(
+      "ADR-001",
+      "ADR-007",
+      "rac",
+    )) as RenamePlan;
+    expect(result.ok).toBe(true);
+    expect(result.files_changed).toBe(2);
+    expect(result.reference_edits).toBe(3);
+    expect(result.identity_edits).toBe(1);
+    expect(result.edits[0]?.kind).toBe("identity");
+    expect(result.edits[1]?.line).toBe(42);
+    expect(calls[0]).toEqual(["rename", "ADR-001", "ADR-007", "rac", "--json"]);
+  });
+
+  it("appends --apply when options.apply is set and parses the result", async () => {
+    const { runner, calls } = fakeRunner({
+      stdout: JSON.stringify({
+        directory: "rac",
+        old_ref: "ADR-001",
+        new_ref: "ADR-007",
+        applied: true,
+        target_path: "rac/decisions/adr-007.md",
+        files_changed: 2,
+        reference_edits: 3,
+        identity_edits: 1,
+      }),
+    });
+    const result = (await new RacClient({ runner }).rename("ADR-001", "ADR-007", "rac", {
+      apply: true,
+    })) as RenameResult;
+    expect(result.applied).toBe(true);
+    expect(result.target_path).toBe("rac/decisions/adr-007.md");
+    expect(calls[0]).toEqual([
+      "rename",
+      "ADR-001",
+      "ADR-007",
+      "rac",
+      "--json",
+      "--apply",
+    ]);
+  });
+
+  it("returns the parsed plan on a refusal (ok:false, exit code 1)", async () => {
+    const { runner, calls } = fakeRunner({
+      code: 1,
+      stdout: JSON.stringify({
+        directory: "rac",
+        recursive: true,
+        old_ref: "ADR-999",
+        new_ref: "ADR-007",
+        ok: false,
+        reason: "old-ref-not-found",
+        target_path: null,
+        identity_field: null,
+        files_changed: 0,
+        reference_edits: 0,
+        identity_edits: 0,
+        edits: [],
+      }),
+    });
+    const result = (await new RacClient({ runner }).rename(
+      "ADR-999",
+      "ADR-007",
+      "rac",
+    )) as RenamePlan;
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe("old-ref-not-found");
+    expect(result.edits).toEqual([]);
+    expect(calls[0]).toEqual(["rename", "ADR-999", "ADR-007", "rac", "--json"]);
+  });
+});
+
 describe("createArtifact", () => {
   it("scaffolds an artifact and parses the result", async () => {
     const { runner, calls } = fakeRunner({
@@ -205,6 +343,54 @@ describe("exportHtml", () => {
     await expect(
       new RacClient({ runner }).exportHtml("rac", "/bad/x.html"),
     ).rejects.toBeInstanceOf(RacExecError);
+  });
+});
+
+describe("agentRules", () => {
+  it("generates and parses the per-client file states", async () => {
+    const { runner, calls } = fakeRunner({
+      stdout: JSON.stringify({
+        mode: "generate",
+        digest: "abc123",
+        root: "/w",
+        files: [
+          { client: "claude", path: "CLAUDE.md", state: "written" },
+          { client: "agents", path: "AGENTS.md", state: "in-sync" },
+        ],
+      }),
+    });
+    const result = await new RacClient({ runner }).agentRules("rac", { out: "/w" });
+    expect(result.mode).toBe("generate");
+    expect(result.digest).toBe("abc123");
+    expect(result.files[0]?.state).toBe("written");
+    expect(calls[0]).toEqual(["export", "rac", "--agent-rules", "--json", "--out", "/w"]);
+  });
+
+  it("passes --check and restricts clients, returning drift on exit 1", async () => {
+    const { runner, calls } = fakeRunner({
+      code: 1,
+      stdout: JSON.stringify({
+        mode: "check",
+        digest: "def456",
+        root: "/w",
+        files: [{ client: "claude", path: "CLAUDE.md", state: "stale" }],
+      }),
+    });
+    const result = await new RacClient({ runner }).agentRules("rac", {
+      check: true,
+      clients: ["claude"],
+    });
+    expect(result.mode).toBe("check");
+    expect(result.files[0]?.state).toBe("stale");
+    expect(calls[0]).toEqual([
+      "export",
+      "rac",
+      "--agent-rules",
+      "--json",
+      "--check",
+      "--client",
+      "claude",
+    ]);
   });
 });
 

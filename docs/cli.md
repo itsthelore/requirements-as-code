@@ -39,7 +39,8 @@ Validate an artifact — or every artifact in a directory — for structural and
 content issues.
 
 - **Input:** `rac validate <path>` — a Markdown file, a directory, or `-` for stdin.
-- **Options:** `--json` · `--top-level` · `--recursive` (directory mode)
+- **Options:** `--json` · `--top-level` · `--recursive` (directory mode) ·
+  `--corpus DIR` (stdin / single-file mode — see below)
 - **Exit codes:** `0` no errors · `1` validation errors · `2` path not found / unreadable
 
 ```bash
@@ -73,6 +74,52 @@ document is a valid outcome (see [ADR-010](artifacts.md#documents-vs-artifacts))
 Only validation *errors* in recognized artifacts fail the run. The `--json` form
 reports `summary` counts plus a per-file `files[]` list with `status`
 (`valid` / `invalid` / `skipped`) and issues.
+
+### Corpus-aware single-document validation (`--corpus`)
+
+Plain `rac validate -` is single-document: it cannot resolve cross-artifact
+references, so it cannot tell that a *proposed* edit introduces a reference to a
+decision the team has retired. Pass `--corpus DIR` (with stdin `-` or a single
+file) to validate the proposed document **and** resolve its outbound references
+against the live corpus at `DIR`:
+
+```bash
+cat proposed-roadmap.md | rac validate - --corpus rac/
+```
+
+```text
+FAIL  -
+
+Corpus references
+  Related Decisions:
+  ✗ adr-014-legacy-auth superseded
+
+0 error(s), 0 warning(s), 1 corpus reference finding(s).
+```
+
+- **Input:** the proposed document on stdin (`-`) or a single file; `--corpus`
+  points at the corpus directory.
+- **What it checks:** the document's own structural validation (exactly as
+  without `--corpus`), **plus** the document's references resolved against the
+  corpus — references to **retired** (superseded/deprecated) or **missing**
+  decisions, and other reference findings (wrong target type, etc.). Only the
+  proposed document's *own* outbound references are reported; pre-existing corpus
+  findings are not.
+- **Exit codes:** `0` clean · `1` any structural error **or** any corpus
+  reference finding · `2` usage (`--corpus` with a directory target, or a
+  `--corpus` path that is not a directory).
+- **Editing an existing artifact:** when the proposed document carries the same
+  canonical identity as an on-disk artifact (its frontmatter `id` or `## ID`),
+  that on-disk counterpart is excluded from the corpus index, so the edit is
+  validated as a *replacement* — no spurious duplicate-identity or
+  self-reference finding. A stdin document identified only by path (`-`) does not
+  collide and is validated against the whole corpus as-is.
+
+This is the engine seam the generated Claude Code pre-edit hook pipes proposed
+content into; see [Agent integration](governance.md#agent-integration-context-supply-and-enforcement).
+Validation stays in `rac` — the hook computes nothing
+([ADR-067](https://github.com/tcballard/requirements-as-code/blob/main/rac/decisions/adr-067-agent-integration-boundary.md),
+[ADR-063](https://github.com/tcballard/requirements-as-code/blob/main/rac/decisions/adr-063-non-python-clients-are-thin.md)).
 
 ---
 
@@ -235,6 +282,76 @@ rac relationships rac/ --validate   # check that every reference resolves
 
 Finding no relationships is **not** an error. See [relationships.md](relationships.md)
 for the issue codes `--validate` reports.
+
+---
+
+## rename
+
+Safely rename an artifact id across the whole corpus. Renaming an id by hand
+corrupts links — every inbound reference to the old id silently dangles. `rac
+rename` computes the corpus-wide edit set deterministically and reversibly, so the
+references and the artifact's own identity move together. The engine owns the edit
+set; editors and other clients preview and invoke it, never computing references
+themselves (ADR-063).
+
+- **Input:** `rac rename <old-id> <new-id> <directory>` — the existing id (or one
+  of its aliases), the new human id (e.g. `ADR-099`), and the corpus to scan.
+- **Options:** `--apply` (write the edits; default is a dry-run preview) · `--json`
+  (the stable plan/result contract, ADR-007) · `--top-level`
+- **Exit codes:** `0` a valid plan was previewed (dry run) or applied · `1` the
+  rename was **refused** (`old-id` not found or ambiguous, `new-id` invalid or
+  colliding, or `old-id` is only a filename-derived alias) — nothing is written ·
+  `2` not a directory
+
+```bash
+rac rename ADR-001 ADR-099 rac/            # dry run — preview the edit set
+rac rename ADR-001 ADR-099 rac/ --apply    # apply it; references + identity move together
+rac rename ADR-001 ADR-099 rac/ --json     # the plan as a stable dict
+```
+
+**What it rewrites.** Two things, deterministically:
+
+1. **Inbound references** — every `## Related X` / `## Supersedes` list line whose
+   reference token equals `old-id`. Only the token is replaced; surrounding text is
+   preserved verbatim, so `- ADR-001 (blocked)` becomes `- ADR-099 (blocked)` (the
+   raw reference text is the source of truth, ADR-016). A line that names a
+   *different* alias of the same target is left untouched — the rename operates on
+   the `old-id` token specifically.
+2. **The target's own identity** — the one declared, editable identity field that
+   equals `old-id`: the canonical frontmatter `id`, a `## ID` section value, or the
+   type's declared id section. The file is **not** renamed and the canonical
+   frontmatter `id` is changed only when `old-id` *is* that value.
+
+**When it refuses.** If `old-id` resolves only through a filename-derived alias
+(the filename prefix or stem) there is no in-file token to rewrite without renaming
+the file, which is out of scope — so the rename refuses rather than leave `new-id`
+dangling. It also refuses an `old-id` that is unknown or ambiguous, and a `new-id`
+that is malformed or already names another artifact (which would create a duplicate
+identity). Every refusal leaves the corpus untouched and exits `1`.
+
+**Guarantees.**
+
+- **Deterministic** — the same inputs produce a byte-identical plan; edits are
+  ordered by path then line (ADR-002).
+- **Reversible** — applying `rename <new> <old>` after a rename restores the
+  original bytes. No semantic inference happens anywhere.
+- **Clean afterwards** — after `--apply`, `rac relationships <dir> --validate` is
+  clean: every inbound reference resolves to the renamed artifact.
+
+The `--json` plan is `{ ok, reason, old_ref, new_ref, target_path,
+identity_field, files_changed, reference_edits, identity_edits, edits[] }`, where
+each edit is `{ path, line, old_line, new_line, kind }` (`kind` is `"reference"` or
+`"identity"`). On refusal, `ok` is `false` and `reason` is one of the stable codes
+`old-ref-not-found`, `old-ref-ambiguous`, `new-ref-invalid`, `new-ref-collides`,
+`old-ref-filename-only`. The `--apply` result is `{ applied, old_ref, new_ref,
+target_path, files_changed, reference_edits, identity_edits }`.
+
+In the editor, **RAC: Rename artifact id** runs this dry run, shows the affected
+files and lines as a preview, and on confirm applies it — the extension previews
+and invokes the engine plan, it never computes references (ADR-063). The
+**add relationship** code action inserts a resolvable reference into the right
+`## Related X` section, and the missing-section quick-fix bodies are sourced from
+`rac schema <type>` so they cannot drift from the canonical schema.
 
 ---
 

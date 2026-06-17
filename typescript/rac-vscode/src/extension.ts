@@ -35,12 +35,24 @@ import {
   type DirectoryValidation,
   type ExportArtifact,
   type FileValidation,
+  type FindMatch,
   type Issue,
   type RelationshipIssue,
   type RelationshipValidation,
+  type RenamePlan,
+  type RenameResult,
   type ResolveResult,
   type ResolvedArtifact,
+  type SchemaReference,
 } from "@rac/sdk";
+
+import {
+  CLAUDE_SETTINGS_RELPATH,
+  HOOK_SCRIPT_RELPATH,
+  mergeHookSettings,
+  removeHookSettings,
+  renderHookScript,
+} from "./claudeHook";
 
 const DEBOUNCE_MS = 300;
 const RELATIONSHIP_DEBOUNCE_MS = 600;
@@ -84,6 +96,15 @@ export function activate(context: vscode.ExtensionContext): void {
       // diagnostic for it to avoid duplicates.
       workspaceDiagnostics.delete(doc.uri);
     }),
+    // Save-time structural backstop (v0.21.16, Initiative 2; ADR-067). A save is
+    // a save regardless of which agent wrote the change, so this catches a
+    // structural contradiction — a reference to a retired or missing decision —
+    // *as* the file is committed to disk, before the bad state solidifies. It is
+    // non-blocking (it warns; it never vetoes the save) and strictly structural
+    // (no semantic scoring): the engine computes the finding via `rac validate`.
+    vscode.workspace.onWillSaveTextDocument((e) => {
+      e.waitUntil(saveGate(e.document));
+    }),
     vscode.workspace.onDidSaveTextDocument((doc) => {
       void validateDocument(doc);
       scheduleRelationshipsFor(doc);
@@ -110,7 +131,17 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("rac.newArtifact", newArtifact),
     vscode.commands.registerCommand("rac.showExplorer", showExplorer),
     vscode.commands.registerCommand("rac.setupWorkspace", setupWorkspace),
+    vscode.commands.registerCommand("rac.setupAgentIntegration", () =>
+      setupAgentIntegration(context),
+    ),
+    vscode.commands.registerCommand("rac.findDecisions", findDecisionsCommand),
+    vscode.commands.registerCommand("rac.renameArtifact", renameArtifactCommand),
+    vscode.commands.registerCommand("rac.addRelationship", addRelationshipCommand),
+    vscode.commands.registerCommand("rac.insertSection", insertSection),
+    vscode.commands.registerCommand("rac.openArtifactFile", openArtifactFile),
     vscode.commands.registerCommand("rac.installRac", installRac),
+    vscode.commands.registerCommand("rac.enableClaudePreEditHook", enableClaudePreEditHook),
+    vscode.commands.registerCommand("rac.disableClaudePreEditHook", disableClaudePreEditHook),
     vscode.languages.registerHoverProvider(selector, { provideHover }),
     vscode.languages.registerDefinitionProvider(selector, { provideDefinition }),
     vscode.languages.registerReferenceProvider(selector, { provideReferences }),
@@ -123,7 +154,12 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerCodeActionsProvider(
       selector,
       { provideCodeActions },
-      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] },
+      {
+        providedCodeActionKinds: [
+          vscode.CodeActionKind.QuickFix,
+          vscode.CodeActionKind.Refactor,
+        ],
+      },
     ),
   );
 
@@ -202,6 +238,37 @@ async function validateDocument(doc: vscode.TextDocument): Promise<void> {
     }
     log("validation failed", err);
   }
+}
+
+// The save-time backstop (v0.21.16, Initiative 2; ADR-067). Runs the engine's
+// own structural validation on the buffer being saved (`rac validate -` via the
+// thin client — no logic here) and, if it finds a blocking structural issue,
+// informs the user as the save lands. It returns no edits, so it never blocks or
+// mutates the save: a save is a save, and the gate is a backstop, not a veto
+// (the diagnostics model already surfaces the same findings inline). Strictly
+// structural — there is no semantic scoring anywhere in this path.
+async function saveGate(doc: vscode.TextDocument): Promise<vscode.TextEdit[]> {
+  if (!isEnabled()) return [];
+  if (doc.languageId !== "markdown" || doc.uri.scheme !== "file") return [];
+  if (!looksLikeRacArtifact(doc.getText())) return [];
+  const folder = vscode.workspace.getWorkspaceFolder(doc.uri);
+  if (!folder) return [];
+
+  try {
+    const result = await clientFor(folder).validateText(doc.getText());
+    if (result.errors.length > 0) {
+      const first = result.errors[0];
+      void vscode.window.showWarningMessage(
+        `RAC: saved with ${result.errors.length} structural issue(s) — ${first.message}. ` +
+          "See the Problems panel.",
+      );
+    }
+  } catch (err) {
+    if (err instanceof RacNotFoundError) warnMissingOnce();
+    else log("save-gate validation failed", err);
+  }
+  // Always resolve with no edits — the save proceeds unmodified.
+  return [];
 }
 
 function toDiagnostics(result: FileValidation): vscode.Diagnostic[] {
@@ -671,14 +738,85 @@ async function provideCompletions(
   return items;
 }
 
+// Reference-validation codes a reference-site quick-fix acts on (v0.21.16,
+// Initiative 2). A retired-target reference is the headline structural
+// contradiction the save-gate surfaces; a not-found/ambiguous reference is a
+// broken link. Both anchor at the reference token, so the quick-fix can offer to
+// open the (resolvable) target or remove the offending reference line.
+const REFERENCE_FIX_CODES = new Set([
+  "relationship-target-superseded",
+  "relationship-target-not-found",
+  "relationship-target-ambiguous",
+  "relationship-target-type-mismatch",
+]);
+
 function provideCodeActions(
   doc: vscode.TextDocument,
-  _range: vscode.Range,
+  range: vscode.Range,
   context: vscode.CodeActionContext,
 ): vscode.CodeAction[] {
   const actions: vscode.CodeAction[] = [];
+
+  // Add-relationship action (v0.21.18): offered when the cursor sits in a
+  // relationship section of a RAC artifact. It opens a quick-pick of targets the
+  // engine already exported — the extension lists, never computes resolvability
+  // (ADR-063). Surfaced as a Refactor (it inserts a reference, not a fix).
+  if (
+    looksLikeRacArtifact(doc.getText()) &&
+    inRelationshipSection(doc, range.start.line)
+  ) {
+    const add = new vscode.CodeAction(
+      "RAC: Add relationship…",
+      vscode.CodeActionKind.Refactor,
+    );
+    add.command = {
+      command: "rac.addRelationship",
+      title: "RAC: Add relationship…",
+      arguments: [doc.uri, range.start.line],
+    };
+    actions.push(add);
+  }
+
   for (const diagnostic of context.diagnostics) {
     if (diagnostic.source !== "rac" || typeof diagnostic.code !== "string") continue;
+
+    // Reference-site quick-fix layered over the relationship diagnostics. The
+    // target token is the diagnostic range's text; offer to open it (when it
+    // resolves, e.g. a retired but still-present decision) and to remove the
+    // broken/retired reference line. Removal is the structural repair — no
+    // semantic rewrite (ADR-067).
+    if (REFERENCE_FIX_CODES.has(diagnostic.code)) {
+      const target = doc.getText(diagnostic.range).trim();
+
+      if (diagnostic.code === "relationship-target-superseded" && target) {
+        // The retired target still exists, so offer to open it for the human to
+        // pick a live replacement.
+        const open = new vscode.CodeAction(
+          `Open referenced decision (${target})`,
+          vscode.CodeActionKind.QuickFix,
+        );
+        open.diagnostics = [diagnostic];
+        open.command = {
+          command: "rac.openArtifactFile",
+          title: "Open referenced decision",
+          arguments: [doc.uri, target],
+        };
+        actions.push(open);
+      }
+
+      const remove = new vscode.CodeAction(
+        `Remove reference to ${target || "this artifact"}`,
+        vscode.CodeActionKind.QuickFix,
+      );
+      remove.diagnostics = [diagnostic];
+      const edit = new vscode.WorkspaceEdit();
+      // Delete the whole list line bearing the reference (a "- adr-007" item),
+      // newline included, so the section is left structurally clean.
+      edit.delete(doc.uri, fullLineRange(doc, diagnostic.range.start.line));
+      remove.edit = edit;
+      actions.push(remove);
+      continue;
+    }
 
     if (diagnostic.code === "missing-title") {
       // A title is a top-level `# ` heading, not a `## ` section — insert it
@@ -697,23 +835,101 @@ function provideCodeActions(
     }
 
     // The remaining missing-<section> codes (problem, requirements, risks,
-    // success-metrics) are genuine `## ` sections.
+    // success-metrics) are genuine `## ` sections. The body is sourced from the
+    // canonical schema (`rac schema`), not a TypeScript template, so it cannot
+    // drift from the engine (v0.21.18; ADR-063, ADR-007). The schema lookup is
+    // async, so the action runs through a command rather than a static edit.
     const match = /^missing-(.+)$/.exec(diagnostic.code);
     if (!match) continue;
-    const title = titleCase(match[1].replace(/-/g, " "));
+    const section = match[1]; // snake-or-hyphen, e.g. "success-metrics"
+    const title = titleCase(section.replace(/-/g, " "));
     const action = new vscode.CodeAction(
       `Insert "## ${title}" section`,
       vscode.CodeActionKind.QuickFix,
     );
     action.diagnostics = [diagnostic];
-    const edit = new vscode.WorkspaceEdit();
-    const text = doc.getText();
-    const separator = text.endsWith("\n") ? "\n" : "\n\n";
-    edit.insert(doc.uri, endOfDocument(doc), `${separator}## ${title}\n\n`);
-    action.edit = edit;
+    action.command = {
+      command: "rac.insertSection",
+      title: `Insert "## ${title}" section`,
+      arguments: [doc.uri, section],
+    };
     actions.push(action);
   }
   return actions;
+}
+
+// The snake-case section key the schema JSON uses (e.g. "success-metrics" or
+// "success metrics" -> "success_metrics").
+function sectionKey(section: string): string {
+  return section.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+// Render a `## ` section body from the canonical schema guidance, mirroring how
+// `rac schema --template` renders a section: the title heading, then each
+// guidance line as an `<!-- … -->` comment prompt. Falls back to an empty body
+// when the schema has no guidance for the section.
+function renderSectionBody(title: string, guidance: string[]): string {
+  const lines = [`## ${title}`, ""];
+  for (const prompt of guidance) lines.push(`<!-- ${prompt} -->`);
+  if (guidance.length > 0) lines.push("");
+  return lines.join("\n") + "\n";
+}
+
+// The artifact type for a document, discovered without semantic inference: read
+// the frontmatter `type:` if present, else match the document's path against the
+// engine's corpus export. Returns undefined when neither yields a type — the
+// engine, not the extension, owns classification (ADR-063).
+async function artifactTypeFor(
+  doc: vscode.TextDocument,
+): Promise<string | undefined> {
+  const front = FRONTMATTER.exec(doc.getText());
+  const typeLine = front ? /(^|\n)\s*type\s*:\s*([A-Za-z]+)/.exec(front[1] ?? "") : null;
+  if (typeLine) return typeLine[2].toLowerCase();
+
+  const folder = vscode.workspace.getWorkspaceFolder(doc.uri);
+  if (!folder) return undefined;
+  const corpus = await corpusExport(folder);
+  const artifact = corpus?.artifacts.find(
+    (a) => artifactUri(folder, a.path).fsPath === doc.uri.fsPath,
+  );
+  return artifact?.type;
+}
+
+// Command target for the missing-section quick-fix. Looks up the canonical
+// schema for the document's type and inserts the section with its schema-defined
+// guidance body, so the inserted body can never drift from `rac schema`
+// (v0.21.18; ADR-063). Falls back to a bare heading when the type or schema is
+// unavailable.
+async function insertSection(docUri: vscode.Uri, section: string): Promise<void> {
+  let doc: vscode.TextDocument;
+  try {
+    doc = await vscode.workspace.openTextDocument(docUri);
+  } catch {
+    return;
+  }
+  const folder = vscode.workspace.getWorkspaceFolder(docUri);
+  if (!folder) return;
+  const title = titleCase(section.replace(/-/g, " "));
+  const key = sectionKey(section);
+
+  let guidance: string[] = [];
+  try {
+    const type = await artifactTypeFor(doc);
+    if (type) {
+      const schema: SchemaReference = await clientFor(folder).schema(type);
+      guidance = schema.guidance[key] ?? [];
+    }
+  } catch (err) {
+    if (err instanceof RacNotFoundError) warnMissingOnce();
+    else log("schema lookup for missing-section quick-fix failed", err);
+    // Fall through with no guidance — insert the bare heading rather than fail.
+  }
+
+  const text = doc.getText();
+  const separator = text.endsWith("\n") ? "\n" : "\n\n";
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(docUri, endOfDocument(doc), `${separator}${renderSectionBody(title, guidance)}`);
+  await vscode.workspace.applyEdit(edit);
 }
 
 // A title goes immediately after the YAML frontmatter block, else at the top.
@@ -729,6 +945,17 @@ function titleInsertPosition(doc: vscode.TextDocument): vscode.Position {
 
 function endOfDocument(doc: vscode.TextDocument): vscode.Position {
   return doc.lineAt(doc.lineCount - 1).range.end;
+}
+
+// The full range of a line including its trailing newline, so deleting it leaves
+// no blank gap (used by the reference-removal quick-fix).
+function fullLineRange(doc: vscode.TextDocument, line: number): vscode.Range {
+  const start = new vscode.Position(line, 0);
+  const end =
+    line + 1 < doc.lineCount
+      ? new vscode.Position(line + 1, 0)
+      : doc.lineAt(line).range.end;
+  return new vscode.Range(start, end);
 }
 
 async function newArtifact(): Promise<void> {
@@ -1198,5 +1425,608 @@ async function setupWorkspace(): Promise<void> {
     void vscode.window.showErrorMessage(
       `RAC: setup failed: ${err instanceof Error ? err.message : String(err)}`,
     );
+  }
+}
+
+// --- live decision query (roadmap v0.21.16, Initiative 1; ADR-067) ----------
+//
+// "RAC: What did we decide about…?" prompts for a topic and runs the engine's
+// `rac find <topic> --decisions` (the live decision query), showing the ranked
+// live decisions in a quick-pick. Selecting one opens its file. The extension
+// computes nothing (ADR-063): the engine retrieves which live decisions bind the
+// topic; the human reads them and judges. No verdict, no scoring.
+
+interface DecisionPick extends vscode.QuickPickItem {
+  match: FindMatch;
+}
+
+async function findDecisionsCommand(): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    void vscode.window.showErrorMessage("RAC: open a workspace folder first.");
+    return;
+  }
+  const topic = await vscode.window.showInputBox({
+    prompt: "What did we decide about…?",
+    placeHolder: "Topic, e.g. caching, telemetry, identity",
+  });
+  if (!topic) return;
+
+  let matches: FindMatch[];
+  try {
+    const result = await clientFor(folder).findDecisions(topic, folder.uri.fsPath);
+    matches = result.matches;
+  } catch (err) {
+    if (err instanceof RacNotFoundError) {
+      warnMissingOnce();
+      return;
+    }
+    log("find-decisions failed", err);
+    void vscode.window.showErrorMessage(
+      `RAC: decision query failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return;
+  }
+
+  if (matches.length === 0) {
+    // An empty result is a valid answer, not an error — say so plainly.
+    void vscode.window.showInformationMessage(
+      `RAC: no live decision matches "${topic}".`,
+    );
+    return;
+  }
+
+  const picks: DecisionPick[] = matches.map((m) => ({
+    label: m.title || m.id,
+    description: m.id,
+    detail: m.snippet ? `${m.section ? `${m.section}: ` : ""}${m.snippet}` : m.path,
+    match: m,
+  }));
+  const chosen = await vscode.window.showQuickPick(picks, {
+    placeHolder: `Live decisions about "${topic}" — select one to open`,
+    matchOnDescription: true,
+    matchOnDetail: true,
+  });
+  if (!chosen) return;
+  await openArtifactPath(folder, chosen.match.path);
+}
+
+// Open an artifact file by its engine-reported path, confined to the workspace
+// folder. Shared by the decision quick-pick and the reference quick-fix.
+async function openArtifactPath(
+  folder: vscode.WorkspaceFolder,
+  artifactPath: string,
+): Promise<void> {
+  const uri = artifactUri(folder, artifactPath);
+  try {
+    const doc = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(doc);
+  } catch {
+    void vscode.window.showErrorMessage(`RAC: could not open ${artifactPath}.`);
+  }
+}
+
+// Command target for the reference-site "Open referenced decision" quick-fix:
+// resolve a reference token against the corpus and open the artifact it points
+// at. Resolution stays the engine's (ADR-063); the extension only navigates.
+async function openArtifactFile(docUri: vscode.Uri, token: string): Promise<void> {
+  const folder = vscode.workspace.getWorkspaceFolder(docUri);
+  if (!folder) return;
+  const result = await resolveToken(folder, token);
+  if (result && isResolved(result)) {
+    await openArtifactPath(folder, result.path);
+  } else {
+    void vscode.window.showInformationMessage(
+      `RAC: "${token}" does not resolve to an artifact.`,
+    );
+  }
+}
+
+// --- safe rename & add-relationship (roadmap v0.21.18; ADR-063, ADR-007) ----
+//
+// "RAC: Rename artifact id" renames an artifact id (or alias) and rewrites every
+// inbound reference across the corpus. The extension computes nothing: it runs
+// `rac rename` as a dry run, previews the engine's edit set, and on confirmation
+// re-runs it with `--apply`. Reference discovery, validation, and the edits are
+// all the engine's (ADR-063). The "Add relationship…" action lists targets the
+// engine already exported and inserts one — again, no editor-side resolvability.
+
+/** True once a rename plan describes a writable result rather than a dry-run plan. */
+function isRenameResult(plan: RenamePlan | RenameResult): plan is RenameResult {
+  return "applied" in plan;
+}
+
+// Human-readable refusal reasons from the engine's `plan.reason` codes.
+const RENAME_REASONS: Record<string, string> = {
+  "old-ref-not-found": "the old id does not resolve to an artifact",
+  "old-ref-ambiguous": "the old id matches more than one artifact",
+  "new-ref-invalid": "the new id is not a valid reference",
+  "new-ref-collides": "the new id already resolves to an artifact",
+  "old-ref-filename-only": "the old id is only a filename, not a reference",
+};
+
+async function renameArtifactCommand(): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  const folder =
+    (editor ? vscode.workspace.getWorkspaceFolder(editor.document.uri) : undefined) ??
+    vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    void vscode.window.showErrorMessage("RAC: open a workspace folder first.");
+    return;
+  }
+
+  // Default the old id to the hyphenated reference token under the cursor.
+  let suggested = "";
+  if (editor) {
+    const range = editor.document.getWordRangeAtPosition(
+      editor.selection.active,
+      REFERENCE_WORD,
+    );
+    const token = range ? editor.document.getText(range) : "";
+    if (token && looksLikeReference(token)) suggested = token;
+  }
+
+  const oldId = await vscode.window.showInputBox({
+    prompt: "Artifact id (or alias) to rename",
+    value: suggested,
+    placeHolder: "e.g. adr-007",
+  });
+  if (!oldId) return;
+  const newId = await vscode.window.showInputBox({
+    prompt: `New id for "${oldId}"`,
+    placeHolder: "e.g. adr-012",
+  });
+  if (!newId) return;
+
+  // Dry run: ask the engine for the edit set (no writes yet).
+  let plan: RenamePlan | RenameResult;
+  try {
+    plan = await clientFor(folder).rename(oldId, newId, folder.uri.fsPath);
+  } catch (err) {
+    if (err instanceof RacNotFoundError) {
+      warnMissingOnce();
+      return;
+    }
+    log("rename dry-run failed", err);
+    void vscode.window.showErrorMessage(
+      `RAC: rename failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return;
+  }
+
+  // A dry run always returns the plan shape; guard anyway.
+  if (isRenameResult(plan) || !plan.ok) {
+    const reason = !isRenameResult(plan) && plan.reason ? plan.reason : "unknown";
+    const explained = RENAME_REASONS[reason] ?? reason;
+    void vscode.window.showErrorMessage(
+      `RAC: cannot rename "${oldId}" → "${newId}" — ${explained}.`,
+    );
+    return;
+  }
+
+  if (plan.files_changed === 0) {
+    void vscode.window.showInformationMessage(
+      `RAC: nothing references "${oldId}"; rename would make no changes.`,
+    );
+    return;
+  }
+
+  // Preview the engine's edit set, then apply on confirmation.
+  const preview = [
+    `Rename "${plan.old_ref}" → "${plan.new_ref}"`,
+    `${plan.files_changed} file(s), ${plan.reference_edits} reference edit(s), ` +
+      `${plan.identity_edits} identity edit(s):`,
+    "",
+    ...plan.edits
+      .slice(0, 20)
+      .map((e) => `${vscode.workspace.asRelativePath(e.path)}:${e.line}  ${e.new_line.trim()}`),
+  ];
+  if (plan.edits.length > 20) preview.push(`…and ${plan.edits.length - 20} more.`);
+
+  const APPLY = "Apply";
+  const choice = await vscode.window.showInformationMessage(
+    preview.join("\n"),
+    { modal: true },
+    APPLY,
+  );
+  if (choice !== APPLY) return;
+
+  let applied: RenamePlan | RenameResult;
+  try {
+    applied = await clientFor(folder).rename(oldId, newId, folder.uri.fsPath, {
+      apply: true,
+    });
+  } catch (err) {
+    if (err instanceof RacNotFoundError) {
+      warnMissingOnce();
+      return;
+    }
+    log("rename apply failed", err);
+    void vscode.window.showErrorMessage(
+      `RAC: rename failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return;
+  }
+
+  // The engine rewrote files on disk; drop cached export/resolve state so
+  // completion and resolution reflect the renamed corpus (mirrors the save path).
+  invalidateExport(folder);
+  resolveCache.clear();
+  void validateWorkspace();
+  refreshAllRelationships();
+
+  if (isRenameResult(applied)) {
+    void vscode.window.showInformationMessage(
+      `RAC: renamed "${applied.old_ref}" → "${applied.new_ref}" across ` +
+        `${applied.files_changed} file(s) (${applied.reference_edits} reference, ` +
+        `${applied.identity_edits} identity edit(s)).`,
+    );
+  }
+}
+
+// Command target for the "RAC: Add relationship…" code action. Lists the
+// resolvable targets the engine already exported (the same alias source as
+// completion) and inserts the chosen one as a `- <alias>` item in the
+// relationship section the cursor sits in. The extension never computes
+// resolvability — it offers what `rac export` resolved (ADR-063).
+async function addRelationshipCommand(docUri: vscode.Uri, line: number): Promise<void> {
+  const folder = vscode.workspace.getWorkspaceFolder(docUri);
+  if (!folder) return;
+  let doc: vscode.TextDocument;
+  try {
+    doc = await vscode.workspace.openTextDocument(docUri);
+  } catch {
+    return;
+  }
+  const corpus = await corpusExport(folder);
+  if (!corpus) {
+    void vscode.window.showInformationMessage("RAC: no corpus targets available.");
+    return;
+  }
+
+  interface AliasPick extends vscode.QuickPickItem {
+    alias: string;
+  }
+  const picks: AliasPick[] = [];
+  const seen = new Set<string>();
+  for (const artifact of corpus.artifacts) {
+    for (const alias of artifact.aliases) {
+      if (alias === artifact.id) continue; // offer human aliases, not opaque ids
+      if (seen.has(alias)) continue;
+      seen.add(alias);
+      picks.push({
+        label: alias,
+        description: `${artifact.type} — ${artifact.title}`,
+        alias,
+      });
+    }
+  }
+  if (picks.length === 0) {
+    void vscode.window.showInformationMessage("RAC: no relationship targets available.");
+    return;
+  }
+
+  const chosen = await vscode.window.showQuickPick(picks, {
+    placeHolder: "Add a relationship to…",
+    matchOnDescription: true,
+  });
+  if (!chosen) return;
+
+  // Insert as a new list item at the start of the line the action fired on.
+  const edit = new vscode.WorkspaceEdit();
+  const insertAt = new vscode.Position(Math.min(line + 1, doc.lineCount), 0);
+  edit.insert(docUri, insertAt, `- ${chosen.alias}\n`);
+  await vscode.workspace.applyEdit(edit);
+}
+
+// --- agent integration (roadmap v0.21.15, ADR-067) --------------------------
+//
+// "RAC: Set up agent integration" wires the corpus into the workspace's AI
+// agents. It computes nothing (ADR-063): `rac export --agent-rules` generates
+// the drift-guarded per-client rules files, and the extension only registers
+// the `lore` MCP server and offers regeneration when the corpus changes.
+//
+// The `lore` MCP server is launched as `rac mcp --root <corpus>` (the same read
+// tools the agent queries, ADR-030). Consent stays the user's: VS Code surfaces
+// the registered server for the user to enable; per-client config files
+// (.cursor/mcp.json, .mcp.json) are written but never auto-enabled (ADR-067
+// non-goal: no auto-enable without consent).
+
+// Track the active rules watcher so re-running setup (or deactivation) replaces
+// rather than stacks watchers.
+let agentRulesWatcher: vscode.FileSystemWatcher | undefined;
+let loreMcpProvider: vscode.Disposable | undefined;
+
+/** The `rac` binary the SDK resolves for a folder (config override, else PATH). */
+function racBinaryFor(folder: vscode.WorkspaceFolder): string {
+  const configured = vscode.workspace
+    .getConfiguration("rac", folder.uri)
+    .get<string>("path")
+    ?.trim();
+  return configured ? configured : "rac";
+}
+
+/**
+ * Register the `lore` MCP server (`rac mcp --root <corpus>`) so MCP-capable
+ * clients (Claude Code, Cursor) can query the corpus. Returns true when the
+ * VS Code MCP API was available and the registration was made. Consent is the
+ * user's: registration only *offers* the server; the user enables it.
+ */
+function registerLoreMcp(
+  context: vscode.ExtensionContext,
+  folder: vscode.WorkspaceFolder,
+): boolean {
+  const lm = vscode.lm as unknown as {
+    registerMcpServerDefinitionProvider?: (
+      id: string,
+      provider: vscode.McpServerDefinitionProvider,
+    ) => vscode.Disposable;
+  };
+  if (typeof lm.registerMcpServerDefinitionProvider !== "function") {
+    // Older VS Code / Cursor without the MCP provider API: fall back to the
+    // generated per-client config files only.
+    return false;
+  }
+
+  loreMcpProvider?.dispose();
+  const command = racBinaryFor(folder);
+  loreMcpProvider = lm.registerMcpServerDefinitionProvider("rac.lore", {
+    provideMcpServerDefinitions: () => [
+      new vscode.McpStdioServerDefinition(
+        "lore",
+        command,
+        ["mcp", "--root", folder.uri.fsPath],
+      ),
+    ],
+  });
+  context.subscriptions.push(loreMcpProvider);
+  return true;
+}
+
+/**
+ * Write a per-client MCP config (Cursor's `.cursor/mcp.json`, the generic
+ * `.mcp.json` Claude Code reads) describing the `lore` stdio server. These are
+ * inert until the user opts in — RAC does not auto-enable them (ADR-067).
+ */
+async function writeMcpConfigFiles(folder: vscode.WorkspaceFolder): Promise<void> {
+  const command = racBinaryFor(folder);
+  const server = {
+    command,
+    args: ["mcp", "--root", folder.uri.fsPath],
+  };
+  // Cursor reads `.cursor/mcp.json` ({ mcpServers: { … } }); Claude Code reads a
+  // project `.mcp.json` with the same shape. One payload, two destinations.
+  const payload = JSON.stringify({ mcpServers: { lore: server } }, null, 2) + "\n";
+  const targets = [
+    vscode.Uri.joinPath(folder.uri, ".cursor", "mcp.json"),
+    vscode.Uri.joinPath(folder.uri, ".mcp.json"),
+  ];
+  const encoder = new TextEncoder();
+  for (const uri of targets) {
+    try {
+      await vscode.workspace.fs.writeFile(uri, encoder.encode(payload));
+    } catch (err) {
+      log(`could not write MCP config ${uri.fsPath}`, err);
+    }
+  }
+}
+
+/**
+ * Watch the corpus and offer regeneration when an artifact changes, so the
+ * committed rules files do not silently drift (ADR-067). The watcher only
+ * *offers* — the user runs the regeneration, keeping the generated files an
+ * explicit, reviewable change.
+ */
+function watchCorpusForDrift(
+  context: vscode.ExtensionContext,
+  folder: vscode.WorkspaceFolder,
+): void {
+  agentRulesWatcher?.dispose();
+  const pattern = new vscode.RelativePattern(folder, "rac/**/*.md");
+  const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+  let pending: ReturnType<typeof setTimeout> | undefined;
+  let prompting = false;
+
+  const offerRegen = (): void => {
+    if (prompting) return;
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(() => {
+      prompting = true;
+      const REGEN = "Regenerate";
+      void vscode.window
+        .showInformationMessage(
+          "RAC: the corpus changed. Regenerate the agent rules files so they don't drift?",
+          REGEN,
+        )
+        .then((choice) => {
+          prompting = false;
+          if (choice === REGEN) void generateAgentRules(folder, { silent: true });
+        });
+    }, AWARENESS_DEBOUNCE_MS);
+  };
+
+  watcher.onDidChange(offerRegen);
+  watcher.onDidCreate(offerRegen);
+  watcher.onDidDelete(offerRegen);
+  agentRulesWatcher = watcher;
+  context.subscriptions.push(watcher);
+}
+
+/** Run `rac export --agent-rules` for a folder; report what was written. */
+async function generateAgentRules(
+  folder: vscode.WorkspaceFolder,
+  options: { silent?: boolean } = {},
+): Promise<boolean> {
+  try {
+    const result = await clientFor(folder).agentRules(folder.uri.fsPath, {
+      out: folder.uri.fsPath,
+    });
+    const changed = result.files.filter(
+      (f) => f.state === "written" || f.state === "updated",
+    );
+    if (!options.silent) {
+      const summary =
+        changed.length === 0
+          ? "agent rules already up to date"
+          : `agent rules updated (${changed.map((f) => f.path).join(", ")})`;
+      void vscode.window.showInformationMessage(`RAC: ${summary}.`);
+    }
+    return true;
+  } catch (err) {
+    if (err instanceof RacNotFoundError) {
+      warnMissingOnce();
+      return false;
+    }
+    log("agent-rules generation failed", err);
+    if (!options.silent) {
+      void vscode.window.showErrorMessage(
+        `RAC: could not generate agent rules: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    return false;
+  }
+}
+
+/**
+ * The "RAC: Set up agent integration" command. Detects which agent targets are
+ * present, generates the rules files via `rac`, registers the `lore` MCP server
+ * (and writes per-client MCP configs), starts a drift watcher, and ends with
+ * the first-run nudge (Initiative 3).
+ */
+async function setupAgentIntegration(context: vscode.ExtensionContext): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    void vscode.window.showErrorMessage("RAC: open a folder first, then set up agent integration.");
+    return;
+  }
+
+  // Detect present agent targets (for the report only — generation always writes
+  // all four so coverage is universal, ADR-067).
+  const present: string[] = [];
+  for (const rel of ["CLAUDE.md", "AGENTS.md", ".cursor", ".github"]) {
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.joinPath(folder.uri, rel));
+      present.push(rel);
+    } catch {
+      // not present — generation will create it
+    }
+  }
+  log(`agent integration: detected ${present.length ? present.join(", ") : "no existing targets"}`);
+
+  if (!(await generateAgentRules(folder))) return;
+
+  const mcpRegistered = registerLoreMcp(context, folder);
+  await writeMcpConfigFiles(folder);
+  watchCorpusForDrift(context, folder);
+
+  // First-run nudge (Initiative 3): point the user at the first MCP moment.
+  const mcpHint = mcpRegistered
+    ? "Enable the `lore` MCP server when your editor prompts, then ask your agent: "
+    : "Your agent now sees the rules files. Once `lore` MCP is enabled, ask your agent: ";
+  void vscode.window.showInformationMessage(
+    `RAC: agent integration ready. ${mcpHint}"what did we decide about X?"`,
+  );
+}
+
+// --- Claude Code pre-edit hook (v0.21.17, ADR-067) --------------------------
+//
+// ADR-067: Claude Code's `PreToolUse` hook is the one platform seam that permits
+// a real pre-edit veto. This extension *generates* the opt-in hook — it is not
+// itself the interceptor. The hook pipes proposed content to
+// `rac validate - --corpus rac` and blocks (exit 2) only on a structural finding
+// (a reference to a retired or missing decision, or a malformed artifact). All
+// validation stays in `rac` (ADR-063). This is Claude-Code-specific; other
+// clients rely on the v0.21.16 post-edit guard. The hook config format lives in
+// one place (`claudeHook.ts`) to mitigate format churn.
+
+/** The corpus directory, relative to the workspace root (matches the drift watcher). */
+const CORPUS_RELDIR = "rac";
+
+/** Read a workspace JSON file, returning `{}` when it is absent or unparseable. */
+async function readJsonFile(uri: vscode.Uri): Promise<Record<string, unknown>> {
+  try {
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    const text = new TextDecoder().decode(bytes).trim();
+    return text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  } catch {
+    // Missing or malformed: start from an empty object so a merge never clobbers
+    // a file we could not understand — and never throws here.
+    return {};
+  }
+}
+
+/**
+ * "RAC: Enable Claude Code pre-edit hook" (opt-in, Claude-Code-specific).
+ *
+ * Writes the generated hook script to `.claude/hooks/rac-preedit.py` and MERGES
+ * a `PreToolUse` registration into `.claude/settings.json` without clobbering
+ * existing settings. Re-running is idempotent (a prior RAC registration is
+ * replaced, not duplicated). Other clients are unaffected (ADR-067).
+ */
+async function enableClaudePreEditHook(): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    void vscode.window.showErrorMessage("RAC: open a folder first, then enable the pre-edit hook.");
+    return;
+  }
+
+  try {
+    const racBin = racBinaryFor(folder);
+    const script = renderHookScript(CORPUS_RELDIR, racBin);
+    const scriptUri = vscode.Uri.joinPath(folder.uri, HOOK_SCRIPT_RELPATH);
+    const settingsUri = vscode.Uri.joinPath(folder.uri, CLAUDE_SETTINGS_RELPATH);
+    const encoder = new TextEncoder();
+
+    // Write the script. The directory is created implicitly by writeFile.
+    await vscode.workspace.fs.writeFile(scriptUri, encoder.encode(script));
+
+    // Merge the registration into existing Claude settings. The command runs the
+    // generated script via python3, with the project root from $CLAUDE_PROJECT_DIR
+    // so it works regardless of the directory Claude Code launches it in.
+    const command = `python3 "$CLAUDE_PROJECT_DIR/${HOOK_SCRIPT_RELPATH}"`;
+    const settings = mergeHookSettings(await readJsonFile(settingsUri), command);
+    const payload = JSON.stringify(settings, null, 2) + "\n";
+    await vscode.workspace.fs.writeFile(settingsUri, encoder.encode(payload));
+
+    log(`Claude Code pre-edit hook enabled (${HOOK_SCRIPT_RELPATH})`);
+    void vscode.window.showInformationMessage(
+      "RAC: Claude Code pre-edit hook enabled. Proposed edits under `rac/` are " +
+        "validated before they land — this is Claude-Code-specific; other clients " +
+        "use the post-edit guard.",
+    );
+  } catch (err) {
+    log("enabling Claude Code pre-edit hook failed", err);
+    void vscode.window.showErrorMessage(
+      `RAC: could not enable the pre-edit hook: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+/**
+ * "RAC: Disable Claude Code pre-edit hook".
+ *
+ * Removes the RAC `PreToolUse` registration from `.claude/settings.json`,
+ * leaving every other hook intact, and deletes the generated script. Falls back
+ * cleanly to the v0.21.16 post-edit diagnostics (ADR-067 success measure).
+ */
+async function disableClaudePreEditHook(): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) return;
+
+  try {
+    const settingsUri = vscode.Uri.joinPath(folder.uri, CLAUDE_SETTINGS_RELPATH);
+    const settings = removeHookSettings(await readJsonFile(settingsUri));
+    const payload = JSON.stringify(settings, null, 2) + "\n";
+    await vscode.workspace.fs.writeFile(settingsUri, new TextEncoder().encode(payload));
+    try {
+      await vscode.workspace.fs.delete(vscode.Uri.joinPath(folder.uri, HOOK_SCRIPT_RELPATH));
+    } catch {
+      // Script already gone — disabling is still complete.
+    }
+    void vscode.window.showInformationMessage(
+      "RAC: Claude Code pre-edit hook disabled. Edits fall back to post-edit diagnostics.",
+    );
+  } catch (err) {
+    log("disabling Claude Code pre-edit hook failed", err);
   }
 }
