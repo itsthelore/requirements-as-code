@@ -13,7 +13,7 @@ Unscheduled — captured as future intent, not yet on a release.
 
 ## Context
 
-`rac route` (ADR-068) is a deterministic prompt-complexity router built inside
+`rac route` (ADR-070) is a deterministic prompt-complexity router built inside
 RAC as an exploration. ADR-069 decides it should not live here: it is a runtime
 *inference* concern, divergent from Lore's recorded-knowledge product line, and
 belongs in its own product — **Wayfinder** — as a sibling repo under the
@@ -30,7 +30,7 @@ of `future/` into a versioned plan.
 - Wayfinder exists as its own repository and package, **fully independent of RAC**
   — no `rac` import, no `requirements-as-code` dependency, no reading of `.rac/`.
 - Wayfinder reaches behavior parity with `rac route`: the same structural score,
-  features, and local/cloud recommendation, with ADR-068's boundary intact (score
+  features, and local/cloud recommendation, with ADR-070's boundary intact (score
   deterministically; never invoke a model).
 - `rac route` is removed from RAC after the cutover, with history preserved, so
   the engine carries no long-term out-of-domain command.
@@ -61,7 +61,7 @@ the `rac route` prototype and all its supporting code (`core/complexity.py`,
 `services/route.py`, the routing config loader in `services/init.py`, the route
 renderers, the SDK exports, `tests/test_route.py`, the `route` CI battery, and the
 `docs/cli.md` section) have been removed from RAC by restoring those files to their
-pre-route state. The routing corpus artifacts (this roadmap, ADR-068, ADR-069, and
+pre-route state. The routing corpus artifacts (this roadmap, ADR-070, ADR-069, and
 the `prompt-complexity-routing` design) are kept as the historical record. What
 remains here is publishing Wayfinder to its own `itsthelore/wayfinder` repository.
 
@@ -73,7 +73,7 @@ ADR-064's history-preserving cutover discipline.
 
 - Independence (ADR-069): Wayfinder has zero runtime dependency on RAC and never
   reads the `.rac/` namespace.
-- Routing boundary (ADR-068): deterministic, offline scoring and a recommendation
+- Routing boundary (ADR-070): deterministic, offline scoring and a recommendation
   only; Wayfinder never invokes a model, selects a provider, reads a credential,
   or tokenizes per a vendor model.
 - Safety contract (ADR-064): nothing is removed from RAC until Wayfinder ships and
@@ -114,7 +114,7 @@ ADR-064's history-preserving cutover discipline.
 ## Related Decisions
 
 - adr-069
-- adr-068
+- adr-070
 - adr-064
 
 ## Related Roadmaps

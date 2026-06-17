@@ -15,7 +15,7 @@ Product
 
 ## Context
 
-`rac route` (ADR-068) was built as an exploration: a deterministic, structural
+`rac route` (ADR-070) was built as an exploration: a deterministic, structural
 prompt-complexity scorer that recommends a local or cloud model. It works, but it
 sits *outside* the product line every other decision has drawn. Lore is recorded
 team knowledge served to agents — "no AI in the core, no inference, no guessing"
@@ -48,7 +48,7 @@ dependency on it.**
   block (the ~17-line, import-free `split_frontmatter`) and a config-file walk-up
   (~10 lines, pointed at Wayfinder's own `wayfinder.toml` / env / flags, never
   `.rac/`).
-- ADR-068's boundary carries into Wayfinder unchanged: it scores deterministically
+- ADR-070's boundary carries into Wayfinder unchanged: it scores deterministically
   and recommends; it never invokes a model, selects a provider, reads a
   credential, or tokenizes per a vendor model. The caller runs inference.
 - The in-RAC `rac route` stays for now and is **earmarked for removal** once
@@ -133,7 +133,7 @@ Full independence is selected.
 
 ## Related Decisions
 
-- adr-068
+- adr-070
 - adr-064
 - adr-036
 - adr-035
