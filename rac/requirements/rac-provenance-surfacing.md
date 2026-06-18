@@ -16,38 +16,55 @@ Scoped to the v0.23.0 hardening release (WS5).
 ## Problem
 
 Lore claims every decision has an accountable human author, but `get_artifact`
-does not surface that accountability. An agent grounding on a decision cannot
-cite who made it, when, or whether it has moved from proposed to accepted to
-superseded. The information already exists in front matter and git history; it
-is simply not exposed on the tool surface.
+does not surface that accountability. Today its payload is
+`{schema_version, id, type, title, path, outgoing, incoming}` — no author, no
+date, no status. An agent grounding on a decision cannot cite who made it, when,
+or whether it has moved from proposed to accepted to superseded. The lifecycle
+`status` already exists as parsed metadata (the `## Status` section, enum per
+type); the rest exists in git history. None of it is on the tool surface.
 
 ## Requirements
 
-- [REQ-001] `get_artifact` MUST expose, additively and backward-compatibly, at minimum: author(s) plus last-commit author, relevant dates, and status history (Proposed → Accepted → Superseded), sourced from front matter plus git.
-- [REQ-002] Provenance MUST be derived from git rather than stored dates in front matter (ADR-045); a `reviewers` front-matter field MAY be used to power the WS11 review signal.
-- [REQ-003] Provenance fields SHOULD be surfaced in search/explain output where useful.
-- [REQ-004] Full PR-reviewer extraction (squash-merge handling, review threads) is out of scope for this release.
+- [REQ-001] `get_artifact` MUST expose, additively and backward-compatibly, at minimum: author(s) plus last-commit author, relevant dates, and status history (Proposed → Accepted → Superseded), sourced from front matter plus git. It does so by gaining one additive `provenance` object on its JSON payload; the existing keys are unchanged and the object is *added*, never reshaped (ADR-007). It carries exactly these fields: `current_status` (string — present lifecycle status, sourced from parsed front-matter-section metadata (`metadata["status"]`), not git; `null` when the type declares no status enum or the section is absent); `last_committed` (ISO-8601 timezone-aware string, or `null` — the most recent commit time for the file, from git (ADR-045), reusing `recency.py` `_last_committed`); `last_author` (string `Name <email>`, or `null` — the author of that most recent commit, same `git log -1` record); `first_committed` / `first_author` (ISO-8601 string and `Name <email>`, or `null` — the creation commit, reusing `recency.py` `_first_committed`, the accountable original author); and `status_history` (ordered list of `{status, committed, author}` entries, or an empty list, derived from git by reading the `## Status` value at each commit that changed it; see REQ-003).
+- [REQ-002] Provenance MUST be derived from git rather than stored dates in front matter (ADR-045); a `reviewers` front-matter field MAY be used to power the WS11 review signal. Concretely, provenance dates and authorship MUST be derived from git, never from stored front-matter dates (ADR-045); no front-matter field is added and `schema_version` is not bumped. Status *value* is read from parsed metadata, not git; only its *history* is reconstructed from git. The `reviewers` front-matter field is the seam the future WS11 review signal MAY use, recorded here only to reserve the name; it is not introduced this release.
+- [REQ-003] `status_history` MUST be derived deterministically and offline by walking the file's git history (e.g. `git log --reverse` plus reading the `## Status` section at each revision) and emitting one entry each time the parsed status value changes, oldest first. Reuse the `recency.py`/`revisions.py` git boundary (ADR-043); WS5 MUST NOT add a third git touchpoint or import a git library (ADR-045 alternatives).
+- [REQ-004] All git-sourced fields MUST degrade to `null` (or, for `status_history`, an empty list) — never raise — when git is unavailable: outside a repository, in a shallow clone where the relevant commits are absent, or for an untracked or uncommitted file. `current_status` still populates from metadata in every case, so an artifact in a non-git directory still reports its status. No exception crosses the service boundary (ADR-045).
+- [REQ-005] Provenance fields SHOULD be surfaced in search/explain output where useful, but `get_artifact` is the only required surface this release.
+- [REQ-006] Full PR-reviewer extraction — squash-merge attribution, review-thread mining, any GitHub PR-API plumbing — is explicitly out of scope for v0.23.0. Provenance is git-and-metadata only; no network call, no key, no fifth tool.
 
 ## Acceptance Criteria
 
-- Provenance populates for this release's dogfooded ADRs (ADR-065, ADR-066).
-- Tests assert the fields populate from front matter plus git.
-- The new fields are additive; existing `get_artifact` consumers are unaffected.
+- The `provenance` object populates for this release's dogfooded ADRs (ADR-065,
+  ADR-066), including a multi-entry `status_history`.
+- A test in a throwaway repository asserts each git-sourced field matches the
+  known commit, and a second asserts that outside a repo (and in a shallow clone
+  missing the history) every git field is `null`/empty while `current_status`
+  still populates from metadata.
+- The pre-WS5 `get_artifact` keys are byte-identical; a contract test asserts
+  the addition is purely additive (ADR-007), consistent with the WS6 agreement
+  test over the four serializers.
 
 ## Success Metrics
 
-- An agent can cite an accountable author and the status of a decision directly
-  from tool output.
+- An agent can cite the accountable original author and the current status of a
+  decision directly from `get_artifact` output, with no AI and no network.
 
 ## Risks
 
-- Git plumbing can balloon. Mitigation: limit to author/last-commit-author,
-  dates, and status history; defer PR-reviewer extraction.
+- Git plumbing can balloon, and per-commit status reconstruction is O(commits
+  touching the file). Mitigation: limit fields to those in REQ-001, walk history
+  once per artifact through the existing boundary, and defer all PR-reviewer
+  extraction (REQ-006).
+- `status_history` reflects history rewriting (rebase/squash moves commit time),
+  as ADR-045 already accepts for recency. Accepted: "when the status last
+  changed in history" is the intent, not forensic authorship.
 
 ## Assumptions
 
-- Git history and front matter carry enough provenance for this release without
-  a PR-API integration.
+- Git history plus parsed status metadata carry enough provenance for this
+  release without any PR-API integration (roadmap WS5 assumption, ADR-045).
+- The existing `recency.py`/`revisions.py` git boundary can host the
+  author/history reads without a new dependency.
 
 ## Related Decisions
 
