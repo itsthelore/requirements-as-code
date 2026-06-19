@@ -8,7 +8,7 @@ tags: [user-facing, retrieval, explainability, mcp]
 
 ## Status
 
-Proposed
+Accepted
 
 Classification: `[user-facing]` — the user sees *why* the agent grounded. Scoped
 to the v0.23.0 hardening release (WS2).
