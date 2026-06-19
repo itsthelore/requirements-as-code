@@ -134,6 +134,32 @@ jobs:
       - name: Check agent-rules freshness
         run: rac export rac/ --agent-rules --check
 
+  # Grounding-eval gate (v0.23.0, WS1, ADR-066): every pull request re-scores the
+  # retrieval tools against the committed fixture corpus and query set and fails
+  # if any gated metric regresses past its floor or baseline tolerance, or a
+  # hard-negative (e.g. a superseded decision) surfaces. `--check` never writes
+  # the baseline; re-baselining is human-only via `rac eval --update-baseline`,
+  # so CI can never silently move the bar. Source install, like the other gates.
+  eval:
+    name: grounding-eval (gate, source install)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Run the grounding-eval gate
+        run: rac eval --check
+
   # PR-gate dogfood (v0.21.14): every pull request runs the local PR-gate action
   # in source mode — the live end-to-end test of pr-gate-action/action.yml. It
   # carries the full contract via a single `rac gate` command — validation,
