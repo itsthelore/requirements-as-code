@@ -8,12 +8,20 @@ tags: [user-facing, demo, grounding, proof]
 
 ## Status
 
-Proposed
+Accepted
 
 Classification: the release's non-cuttable success anchor (Tier 2). It is the
 v0.23.0 definition of done made observable. It stays a manual smoke, never a CI
 gate; the cut line sits above it, so WS6/WS5/WS8/WS10 are dropped before the
 demo, never the demo itself.
+
+Delivered as `examples/obey-demo/` — replay steps (`README.md`) plus an unedited
+capture (`capture.md`) of one real grounded run. It reuses the already
+PR-reviewed `examples/guide/` fixture corpus (whose Accepted `ADR-001`,
+`GUIDE-KTW9YBDWDBFM`, forbids hard `DELETE`) rather than minting a second
+corpus; the verbatim prompt asks for that forbidden hard delete and the agent
+(Claude Code, over the four read-only tools) declines and cites
+`GUIDE-KTW9YBDWDBFM`. It is not wired into CI or the test suite (REQ-003/004).
 
 ## Problem
 
