@@ -105,6 +105,8 @@ jobs:
             paths: "tests/test_doctor.py"
           - name: robustness
             paths: "tests/test_robustness.py"
+          - name: idempotent
+            paths: "tests/test_idempotent.py"
           - name: trust
             paths: "tests/test_trust_model.py"
           - name: revisions
