@@ -55,7 +55,11 @@ from rac.mcp.budget import DEFAULT_BUDGET, serialize
 from rac.mcp.telemetry import TelemetryRecorder
 from rac.services.index import build_repository_index, index_from_corpus
 from rac.services.portfolio import build_portfolio_summary
-from rac.services.relationships import relationships_from_corpus
+from rac.services.relationships import (
+    incoming_references,
+    outgoing_references,
+    relationships_from_corpus,
+)
 from rac.services.resolve import (
     OUTCOME_RESOLVED,
     ResolutionResult,
@@ -140,53 +144,6 @@ def _resolve(root: str, artifact_id: str) -> ResolutionResult:
     return resolve_in_index(entries, artifact_id)
 
 
-def _outgoing_from(relationships: list, path: str) -> dict[str, list[str]]:
-    """The resolved artifact's own relationship sections, references as stored.
-
-    Filters the Core-computed relationship list for references *declared by*
-    ``path`` (ADR-031, presentation-only). Keys are snake_case section names in
-    the artifact's own spec order; ``relationships_from_corpus`` yields
-    references in that order, so a first-seen-wins dict preserves it. References
-    are the raw stored text — the source of truth (ADR-016).
-    """
-    outgoing: dict[str, list[str]] = {}
-    for rel in relationships:
-        if rel.source_path == path:
-            outgoing.setdefault(rel.relationship, []).append(rel.target)
-    return outgoing
-
-
-def _incoming_from(relationships: list, by_path: dict, target_path: str) -> list[dict]:
-    """Artifacts whose declared references resolve to ``target_path``.
-
-    Filters the Core-computed relationship list for references whose
-    ``resolved_path`` is the target — resolution stays Core-owned (ADR-031): a
-    reference is an incoming edge exactly when Core resolved it uniquely to the
-    target. Self-references are excluded. Entries are ordered by source path,
-    then section, matching the deterministic ordering the design pins.
-    """
-    incoming: list[dict] = []
-    for rel in relationships:
-        if rel.resolved_path != target_path:
-            continue
-        if rel.source_path == target_path:
-            continue  # self-references are not incoming edges
-        source = by_path.get(rel.source_path)
-        if source is None:  # pragma: no cover — every relationship source is indexed
-            continue
-        incoming.append(
-            {
-                "id": source.id,
-                "type": source.type,
-                "title": source.title,
-                "path": source.path,
-                "section": rel.relationship,
-            }
-        )
-    incoming.sort(key=lambda e: (e["path"], e["section"]))
-    return incoming
-
-
 def _get_artifact(root: str, artifact_id: str, budget: int) -> str:
     result = _resolve(root, artifact_id)
     if result.outcome != OUTCOME_RESOLVED or result.artifact is None:
@@ -242,12 +199,22 @@ def _get_related(root: str, artifact_id: str, budget: int) -> str:
         return serialize(errors.from_resolution(result), budget)
     artifact = result.artifact
     relationships = relationships_from_corpus(entries)
-    by_path = {entry.path: entry for entry in index}
+    identity_by_path = {entry.path: (entry.id, entry.type, entry.title) for entry in index}
+    incoming = [
+        {
+            "id": ref.id,
+            "type": ref.type,
+            "title": ref.title,
+            "path": ref.path,
+            "section": ref.section,
+        }
+        for ref in incoming_references(relationships, identity_by_path, artifact.path)
+    ]
     payload = {
         "schema_version": "1",
         **artifact.to_dict(),
-        "outgoing": _outgoing_from(relationships, artifact.path),
-        "incoming": _incoming_from(relationships, by_path, artifact.path),
+        "outgoing": outgoing_references(relationships, artifact.path),
+        "incoming": incoming,
     }
     return serialize(payload, budget)
 
@@ -277,7 +244,7 @@ def build_server(
     startup; there is no per-call override. ``recorder`` enables opt-in usage
     telemetry (ADR-040): with ``None`` — the default — nothing is recorded and
     every call is exactly the bare tool body. The returned :class:`FastMCP`
-    instance has the four pinned tools registered and is ready to run over any
+    instance has the five pinned tools registered and is ready to run over any
     transport — the CLI runs it over stdio.
     """
     server: FastMCP = FastMCP(SERVER_NAME)

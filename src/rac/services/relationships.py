@@ -949,3 +949,80 @@ def relationships_from_corpus(entries: list[CorpusEntry]) -> list[Relationship]:
                     )
                 )
     return relationships
+
+
+# --- 1-hop neighborhood (get_related) ----------------------------------------
+#
+# The references an artifact declares (outgoing) and the artifacts whose
+# references resolve to it (incoming). This is the single source of truth for
+# the ``get_related`` MCP tool's view and for the grounding-eval benchmark that
+# guards it (ADR-031, ADR-067): both consume these functions, so the scored
+# surface cannot drift from the served one. Resolution stays Core-owned — an
+# incoming edge exists exactly when a reference resolved uniquely to the target.
+
+
+@dataclass(frozen=True)
+class IncomingReference:
+    """An artifact whose declared reference resolves to a target artifact.
+
+    The ``get_related`` ``incoming`` shape: the referencing artifact's identity
+    plus the snake_case relationship section the reference sits in.
+    """
+
+    id: str
+    type: str
+    title: str | None
+    path: str
+    section: str
+
+
+def outgoing_references(
+    relationships: list[Relationship], source_path: str
+) -> dict[str, list[str]]:
+    """The references ``source_path`` declares, grouped by section, as stored.
+
+    Keys are snake_case section names in the source artifact's own spec order
+    (``relationships_from_corpus`` yields references in that order, so a
+    first-seen-wins dict preserves it). References are the raw stored text — the
+    source of truth (ADR-016).
+    """
+    outgoing: dict[str, list[str]] = {}
+    for rel in relationships:
+        if rel.source_path == source_path:
+            outgoing.setdefault(rel.relationship, []).append(rel.target)
+    return outgoing
+
+
+def incoming_references(
+    relationships: list[Relationship],
+    identity_by_path: dict[str, tuple[str, str, str | None]],
+    target_path: str,
+) -> list[IncomingReference]:
+    """Artifacts whose declared references resolve uniquely to ``target_path``.
+
+    ``identity_by_path`` maps each artifact path to ``(id, type, title)`` (the
+    caller builds it from the repository index). Self-references are excluded;
+    entries are ordered by source path, then section — the deterministic order
+    the ``get_related`` design pins.
+    """
+    incoming: list[IncomingReference] = []
+    for rel in relationships:
+        if rel.resolved_path != target_path:
+            continue
+        if rel.source_path == target_path:  # self-references are not incoming edges
+            continue
+        identity = identity_by_path.get(rel.source_path)
+        if identity is None:  # pragma: no cover — every relationship source is indexed
+            continue
+        source_id, source_type, source_title = identity
+        incoming.append(
+            IncomingReference(
+                id=source_id,
+                type=source_type,
+                title=source_title,
+                path=rel.source_path,
+                section=rel.relationship,
+            )
+        )
+    incoming.sort(key=lambda e: (e.path, e.section))
+    return incoming
