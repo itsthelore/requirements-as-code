@@ -50,6 +50,7 @@ from rac.core.corpus import walk_corpus
 from rac.core.frontmatter import split_frontmatter
 from rac.core.identity import artifact_identifier, artifact_identifiers
 from rac.core.models import Product
+from rac.core.relationship_types import edge_spec
 
 from .inspect import canonical_value
 from .relationships import relationships_from_corpus
@@ -200,6 +201,69 @@ class DocumentsExport:
         return [doc.to_dict(self.corpus_name) for doc in self.documents]
 
 
+@dataclass
+class GraphNode:
+    """One artifact as a graph node (v0.25.0 WS2)."""
+
+    id: str
+    type: str
+    status: str
+    title: str
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "type": self.type, "status": self.status, "title": self.title}
+
+
+@dataclass
+class GraphEdge:
+    """One typed relationship edge (v0.25.0 WS2, ADR-074).
+
+    ``type`` is the registry edge kind (``supersedes``, ``related_decisions``,
+    …) and ``directed`` follows the registry (``supersedes`` is directed; the
+    ``related_*`` edges are not). ``resolved`` is False when the reference does
+    not resolve uniquely, in which case ``target`` is the literal reference text
+    (no phantom node is invented).
+    """
+
+    source: str
+    target: str
+    type: str
+    directed: bool
+    resolved: bool
+
+    def to_dict(self) -> dict:
+        return {
+            "source": self.source,
+            "target": self.target,
+            "type": self.type,
+            "directed": self.directed,
+            "resolved": self.resolved,
+        }
+
+
+@dataclass
+class GraphExport:
+    """Deterministic typed node+edge projection of the corpus (v0.25.0 WS2).
+
+    Surfaces the *typed* relationship graph (ADR-055, ADR-074) for graph
+    backends, unlike the viewer JSON's flattened ``relates-to`` edges, which are
+    unchanged. A single whole-graph JSON object; nodes in sorted-path order and
+    edges sorted by ``(source, type, target)`` — no timestamps (ADR-002).
+    """
+
+    corpus_name: str
+    nodes: list[GraphNode] = field(default_factory=list)
+    edges: list[GraphEdge] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "schema_version": "1",
+            "source": self.corpus_name,
+            "nodes": [node.to_dict() for node in self.nodes],
+            "edges": [edge.to_dict() for edge in self.edges],
+        }
+
+
 def _corpus_name(directory: str) -> str:
     """The directory's basename, deterministic relative to the argument given.
 
@@ -314,3 +378,52 @@ def build_documents_export(directory: str, recursive: bool = True) -> DocumentsE
             )
         )
     return DocumentsExport(corpus_name=_corpus_name(directory), documents=documents)
+
+
+def build_graph_export(directory: str, recursive: bool = True) -> GraphExport:
+    """Project the corpus as typed nodes and edges (v0.25.0 WS2, ADR-074).
+
+    Nodes are the classified artifacts (sorted-path order); edges are the typed
+    relationships ``relationships_from_corpus`` resolves, carrying the registry
+    edge kind and its direction. Resolved targets become canonical-id edges;
+    unresolved references are kept with their literal target and ``resolved:
+    False`` rather than dropped (REQ-004). Deterministic — no timestamps.
+    """
+    entries = list(walk_corpus(directory, recursive=recursive))
+
+    canonical_by_path: dict[str, str] = {}
+    nodes: list[GraphNode] = []
+    for entry in entries:
+        path = str(entry.path)
+        spec = spec_for(entry.artifact_type)  # None for Unknown
+        canonical = artifact_identifier(entry.product, spec, path)
+        canonical_by_path[path] = canonical
+        if spec is None:
+            continue  # unknown files feed resolution but are not nodes
+        nodes.append(
+            GraphNode(
+                id=canonical,
+                type=entry.artifact_type,
+                status=_status(entry.product, spec),
+                title=entry.product.title or canonical,
+            )
+        )
+
+    edges: list[GraphEdge] = []
+    for rel in relationships_from_corpus(entries):
+        kind = edge_spec(rel.relationship)
+        target = (
+            canonical_by_path[rel.resolved_path] if rel.resolved_path is not None else rel.target
+        )
+        edges.append(
+            GraphEdge(
+                source=canonical_by_path[rel.source_path],
+                target=target,
+                type=rel.relationship,
+                directed=kind.directional if kind else False,
+                resolved=rel.resolved_path is not None,
+            )
+        )
+    edges.sort(key=lambda edge: (edge.source, edge.type, edge.target))
+
+    return GraphExport(corpus_name=_corpus_name(directory), nodes=nodes, edges=edges)
