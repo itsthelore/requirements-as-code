@@ -1,6 +1,6 @@
 ---
 name: rac-artifacts
-description: Author and maintain RAC (requirements-as-code) Markdown artifacts — requirements, decisions, roadmaps, prompts, designs — using the rac CLI. Use when asked to create, read, validate, update, or link RAC artifacts in a project's rac/ directory.
+description: Author and maintain RAC (requirements-as-code) Markdown artifacts — requirements, decisions, roadmaps, prompts, designs — using the rac CLI. Use when asked to create, read, validate, update, or link Lore (RAC) artifacts in a project's rac/ directory.
 ---
 
 # RAC artifacts

@@ -1,6 +1,6 @@
 ---
 name: rac-ingest
-description: Convert legacy documents (DOCX, PDF, HTML, PPTX, XLSX, Markdown) into valid, linked RAC (requirements-as-code) artifacts using the rac CLI. Use when asked to import, convert, or migrate existing documents into a project's rac/ directory.
+description: Convert legacy documents (DOCX, PDF, HTML, PPTX, XLSX, Markdown) into valid, linked RAC (requirements-as-code) artifacts using the rac CLI. Use when asked to add, import, convert, or migrate existing documents into Lore (a project's rac/ directory).
 ---
 
 # RAC legacy document conversion

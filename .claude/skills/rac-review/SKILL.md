@@ -1,6 +1,6 @@
 ---
 name: rac-review
-description: Review and triage a RAC (requirements-as-code) corpus using the rac CLI — work prioritised findings worst-first until validation and relationship checks pass. Use when asked to review, triage, or fix findings across a project's rac/ directory.
+description: Review and triage a RAC (requirements-as-code) corpus using the rac CLI — work prioritised findings worst-first until validation and relationship checks pass. Use when asked to review, triage, or fix findings across a project's Lore corpus (the rac/ directory).
 ---
 
 # RAC corpus review

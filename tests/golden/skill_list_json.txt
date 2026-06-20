@@ -3,19 +3,19 @@
   "skills": [
     {
       "skill": "rac-artifacts",
-      "description": "Author and maintain RAC Markdown artifacts with the rac CLI."
+      "description": "Author and maintain Lore (RAC) Markdown artifacts with the rac CLI."
     },
     {
       "skill": "rac-review",
-      "description": "Review a RAC corpus and work findings worst-first."
+      "description": "Review a Lore (RAC) corpus and work findings worst-first."
     },
     {
       "skill": "rac-ingest",
-      "description": "Convert legacy documents into valid, linked RAC artifacts."
+      "description": "Convert legacy documents into valid, linked Lore (RAC) artifacts."
     },
     {
       "skill": "rac-import",
-      "description": "Reformat one document into one valid RAC artifact, with human review."
+      "description": "Reformat one document into one valid Lore (RAC) artifact, with human review."
     }
   ]
 }
