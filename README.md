@@ -68,7 +68,7 @@ a human-review step before anything is written.
 rac skill install rac-import   # installs into .claude/skills/ (Claude Code / Cursor auto-discover)
 ```
 
-Then ask your agent, in plain language: *"import this decision doc into RAC"*
+Then ask your agent, in plain language: *"import this decision doc into Lore"*
 (paste the text or give a path). The skill reads the real schema with
 `rac schema`, drafts the artifact from **only** what your document says, and
 shows you the proposed **type, title, and any relationships to confirm or
