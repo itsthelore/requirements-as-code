@@ -35,19 +35,19 @@ class SkillSpec:
 BUNDLED_SKILLS = (
     SkillSpec(
         name="rac-artifacts",
-        description="Author and maintain RAC Markdown artifacts with the rac CLI.",
+        description="Author and maintain Lore (RAC) Markdown artifacts with the rac CLI.",
     ),
     SkillSpec(
         name="rac-review",
-        description="Review a RAC corpus and work findings worst-first.",
+        description="Review a Lore (RAC) corpus and work findings worst-first.",
     ),
     SkillSpec(
         name="rac-ingest",
-        description="Convert legacy documents into valid, linked RAC artifacts.",
+        description="Convert legacy documents into valid, linked Lore (RAC) artifacts.",
     ),
     SkillSpec(
         name="rac-import",
-        description="Reformat one document into one valid RAC artifact, with human review.",
+        description="Reformat one document into one valid Lore (RAC) artifact, with human review.",
     ),
 )
 

@@ -1,6 +1,6 @@
 ---
 name: rac-import
-description: Reformat ONE existing document (a decision, requirement, design, roadmap, or prompt) into ONE valid RAC (requirements-as-code) artifact, with a mandatory human-review step before any file is written and `rac validate` as the deterministic close. Use when a user wants to import a single existing decision or document into a project's rac/ directory. Single-document only — for multi-format or bulk conversion use the rac-ingest skill.
+description: Reformat ONE existing document (a decision, requirement, design, roadmap, or prompt) into ONE valid RAC (requirements-as-code) artifact, with a mandatory human-review step before any file is written and `rac validate` as the deterministic close. Use when a user wants to add or import a single existing decision or document into Lore (a project's rac/ directory). Single-document only — for multi-format or bulk conversion use the rac-ingest skill.
 ---
 
 # RAC single-document import
