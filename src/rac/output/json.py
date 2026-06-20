@@ -17,7 +17,7 @@ from rac.core.schema import SchemaReference
 from rac.core.skills import SkillSpec
 from rac.services.agent_rules import AgentRulesResult
 from rac.services.create import CreatedArtifact
-from rac.services.export import CorpusExport, DocumentsExport
+from rac.services.export import CorpusExport, DocumentsExport, GraphExport
 from rac.services.gate import GateReport
 from rac.services.hook import InstalledHook
 from rac.services.improve import ImprovementResult
@@ -323,6 +323,16 @@ def render_documents_jsonl(export: DocumentsExport) -> str:
     emitted as UTF-8 rather than escaped.
     """
     return "\n".join(json.dumps(record, ensure_ascii=False) for record in export.to_records())
+
+
+def render_graph_json(export: GraphExport) -> str:
+    """JSON `rac export --graph` output (stable contract, ADR-007, ADR-074).
+
+    A single whole-graph object — nodes and typed, directed edges — for graph
+    backends. Edges carry the registry kind rather than the viewer's flattened
+    ``relates-to`` (which is unchanged). Deterministic ordering, no timestamps.
+    """
+    return json.dumps(export.to_dict(), indent=2)
 
 
 def render_agent_rules_json(result: AgentRulesResult) -> str:
