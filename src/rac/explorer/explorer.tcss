@@ -74,6 +74,23 @@ ContextView TabbedContent {
     height: 1fr;
 }
 
+/* Portfolio list (v0.26.2): a one-line header over the DataTable, which
+   fills the rest of the context region. */
+PortfolioView {
+    height: 1fr;
+}
+
+#portfolio-header {
+    height: 1;
+    color: $text-muted;
+    padding: 0 1;
+}
+
+#portfolio-table {
+    height: 1fr;
+    width: 1fr;
+}
+
 #content-scroll {
     height: 1fr;
     align-horizontal: center;
