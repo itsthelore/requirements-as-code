@@ -403,6 +403,59 @@ async def test_list_command_scopes_to_a_type():
         assert all(row.type == "decision" for row in view._visible())
 
 
+def test_layout_preference_defaults_to_frame_and_validates(monkeypatch, tmp_path):
+    from rac.explorer.preferences import Preferences, load_preferences, save_preferences
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    assert Preferences().layout == "frame"
+    save_preferences(Preferences(layout="split"))
+    assert load_preferences().layout == "split"
+    # An unknown layout falls back to the default (never raises).
+    save_preferences(Preferences(layout="bogus"))
+    assert load_preferences().layout == "frame"
+
+
+@pytest.mark.asyncio
+async def test_split_layout_master_drives_detail(monkeypatch, tmp_path):
+    from rac.explorer.preferences import Preferences, save_preferences
+    from rac.explorer.widgets.views import ContextView, PortfolioView
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    save_preferences(Preferences(layout="split"))
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test(size=(130, 40)) as pilot:
+        await _settled_panel_text(app, pilot)
+        await pilot.pause()
+        # The master pane is a direct workspace child; the sidebar hides.
+        workspace = app.screen.query_one("#workspace")
+        assert sum(isinstance(c, PortfolioView) for c in workspace.children) == 1
+        assert not app.screen.query_one(NavigationSidebar).display
+        # Follow opened the first artifact in the detail reading pane.
+        assert app.screen.current_view == "view-context"
+        assert app.screen.query_one(ContextView).context is not None
+
+
+@pytest.mark.asyncio
+async def test_layout_switches_live_in_settings(monkeypatch, tmp_path):
+    from dataclasses import replace
+
+    from rac.explorer.widgets.views import PortfolioView, SettingsChanged
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))  # default: frame
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test(size=(130, 40)) as pilot:
+        await _settled_panel_text(app, pilot)
+        assert not app.screen._split()
+        # Persist split and fire the settings-changed path the option list uses.
+        app.adapter.save_preferences(replace(app.adapter.preferences, layout="split"))
+        app.screen.on_settings_changed(SettingsChanged("layout"))
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert app.screen._split()
+        workspace = app.screen.query_one("#workspace")
+        assert sum(isinstance(c, PortfolioView) for c in workspace.children) == 1
+
+
 @pytest.mark.asyncio
 async def test_sidebar_hides_in_narrow_terminals():
     app = ExplorerApp(str(FIXTURES / "valid_clean"))
@@ -1064,6 +1117,7 @@ async def test_slash_settings_opens_interactive_view():
             "animations",
             "mascot_interaction",
             "artifact_grouping",
+            "layout",
             "editor",
         ]
         footer = str(app.screen.query_one("#settings-footer", Static).content)
@@ -1119,7 +1173,9 @@ async def test_settings_editor_row_takes_typed_input():
     async with app.run_test() as pilot:
         await _settled_panel_text(app, pilot)
         await _open_settings(app, pilot)
-        await pilot.press("down", "down", "down", "down", "down", "enter")  # editor row
+        # theme, mascot, animations, mascot_interaction, artifact_grouping,
+        # layout, then editor (v0.26.3 added the layout row).
+        await pilot.press("down", "down", "down", "down", "down", "down", "enter")
         await pilot.pause()
         field = app.screen.query_one("#settings-editor-input", Input)
         assert field.display and app.focused is field
