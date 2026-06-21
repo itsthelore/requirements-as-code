@@ -15,6 +15,7 @@ def test_registry_is_the_v0810_contract():
         "open",
         "find",
         "browse",
+        "list",
         "health",
         "stats",
         "recommendations",
