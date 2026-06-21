@@ -900,10 +900,19 @@ class PortfolioView(Vertical):
         yield DataTable(id="portfolio-table", cursor_type="row", zebra_stripes=True)
 
     def on_mount(self) -> None:
-        # Scannable triage columns first; the wider Title sits last so it can
-        # run on without pushing Status/Links/Recency off-screen (v0.26.2).
+        # Fixed widths for the scannable columns keep them tidy and aligned;
+        # Title is auto-sized last so full titles show (and the table scrolls
+        # horizontally if needed). Tune the widths here (v0.26.2).
         table = self.query_one(DataTable)
-        table.add_columns("Type", "ID", "Status", "Links", "Recency", "Title")
+        for label, width in (
+            ("Type", 4),
+            ("ID", 24),
+            ("Status", 16),
+            ("Links", 6),
+            ("Recency", 8),
+        ):
+            table.add_column(label, width=width)
+        table.add_column("Title")  # auto-width: as wide as the longest title
 
     def show_portfolio(
         self,
