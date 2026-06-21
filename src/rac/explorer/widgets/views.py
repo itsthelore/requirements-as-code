@@ -1047,7 +1047,8 @@ class PortfolioView(Vertical):
         table = self.query_one(DataTable)
         if self._follow and table.row_count:
             first = next(iter(table.rows))
-            self.post_message(self.Followed(first.value))
+            if first.value is not None:
+                self.post_message(self.Followed(first.value))
             table.move_cursor(row=0)
 
     def refresh_tags(self) -> None:
