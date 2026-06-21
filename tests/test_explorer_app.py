@@ -261,6 +261,80 @@ async def test_type_tags_recolour_on_theme_change():
         assert tag_style() != dark_style
 
 
+def test_portfolio_state_counts_links_and_humanises_id():
+    from rac.explorer.adapter import ExplorerAdapter
+
+    adapter = ExplorerAdapter(str(FIXTURES / "valid_clean"))
+    adapter.load()
+    state = adapter.portfolio_state()
+    assert state is not None and state.rows
+    # Link counts are the degree in the loaded graph: non-negative ints.
+    assert all(isinstance(row.link_count, int) and row.link_count >= 0 for row in state.rows)
+    # The display id is the human reference, never the opaque RAC- key.
+    assert all(not row.id.startswith("RAC-") for row in state.rows)
+
+
+def test_recency_index_returns_a_mapping():
+    # Outside git (a fixture is not a repository) recency is simply empty — the
+    # column degrades and never raises (v0.26.2).
+    from rac.explorer.adapter import ExplorerAdapter
+
+    adapter = ExplorerAdapter(str(FIXTURES / "valid_clean"))
+    adapter.load()
+    assert isinstance(adapter.recency_index(), dict)
+
+
+@pytest.mark.asyncio
+async def test_list_command_opens_portfolio_table():
+    from textual.widgets import DataTable
+
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        app.screen.route_command("list")
+        await pilot.pause()
+        assert app.screen.current_view == "view-portfolio"
+        table = app.screen.query_one(DataTable)
+        assert table.row_count > 0
+        assert len(table.columns) == 6
+
+
+@pytest.mark.asyncio
+async def test_portfolio_sort_cycles():
+    from rac.explorer.widgets.views import PortfolioView
+
+    app = ExplorerApp(str(FIXTURES / "valid_clean"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        app.screen.route_command("list")
+        await pilot.pause()
+        view = app.screen.query_one(PortfolioView)
+        assert view._sort == "type"
+        view.action_cycle_sort()
+        assert view._sort == "recency"
+
+
+@pytest.mark.asyncio
+async def test_portfolio_filter_narrows_to_invalid():
+    from textual.widgets import DataTable
+
+    from rac.explorer.widgets.views import PortfolioView
+
+    app = ExplorerApp(str(FIXTURES / "invalid_known"))
+    async with app.run_test() as pilot:
+        await _settled_panel_text(app, pilot)
+        app.screen.route_command("list")
+        await pilot.pause()
+        table = app.screen.query_one(DataTable)
+        total = table.row_count
+        view = app.screen.query_one(PortfolioView)
+        view.action_cycle_filter()  # all → invalid
+        await pilot.pause()
+        assert view._filter == "invalid"
+        # The invalid-only view is a non-empty subset of the whole portfolio.
+        assert 0 < table.row_count <= total
+
+
 @pytest.mark.asyncio
 async def test_sidebar_hides_in_narrow_terminals():
     app = ExplorerApp(str(FIXTURES / "valid_clean"))
