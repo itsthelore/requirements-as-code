@@ -11,14 +11,25 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
+from datetime import datetime
 
+from rich.text import Text
 from textual import events, work
 from textual.app import ComposeResult, SuspendNotSupported
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Input, Markdown, OptionList, Static, TabbedContent, TabPane, Tabs
+from textual.widgets import (
+    DataTable,
+    Input,
+    Markdown,
+    OptionList,
+    Static,
+    TabbedContent,
+    TabPane,
+    Tabs,
+)
 from textual.widgets.option_list import Option
 from textual.worker import Worker, WorkerState, get_current_worker
 
@@ -33,13 +44,17 @@ from rac.explorer.state import (
     ImportPreview,
     LoadErrorState,
     LoadProgressState,
+    PortfolioRow,
+    PortfolioState,
     RecommendationRow,
     RecommendationsState,
     RelationshipsView,
     RepositorySummaryState,
     StatsState,
+    relative_age,
 )
 from rac.explorer.widgets import RepositoryPanel
+from rac.explorer.widgets.sidebar import type_tag
 
 _PREVIEW_LINES = 20
 
@@ -845,6 +860,142 @@ class StatsView(Vertical):
         self.query_one("#stats-scroll", VerticalScroll).scroll_relative(
             y=direction * 3, animate=False
         )
+
+
+# Portfolio sort modes and status filters, in the order `s` / `f` cycle them.
+_PORTFOLIO_SORTS = ("type", "recency", "links", "status", "id")
+_PORTFOLIO_FILTERS = ("all", "invalid", "valid")
+
+
+class PortfolioView(Vertical):
+    """The portfolio list (v0.26.2): every artifact as a sortable DataTable.
+
+    Type, id, title, status, and link count render from already-loaded state
+    (ADR-015); the recency column arrives from a git worker after the table is
+    on screen, since git is too slow for the load path (ADR-045). Enter opens
+    the highlighted artifact; ``s`` cycles the sort and ``f`` the status filter.
+    """
+
+    BINDINGS = [
+        Binding("s", "cycle_sort", "Sort"),
+        Binding("f", "cycle_filter", "Filter"),
+    ]
+
+    def __init__(self, adapter: ExplorerAdapter) -> None:
+        super().__init__(id="view-portfolio")
+        self.adapter = adapter
+        self._rows: tuple[PortfolioRow, ...] = ()
+        self._recency: dict[str, datetime] = {}
+        self._sort = "type"
+        self._filter = "all"
+
+    def compose(self) -> ComposeResult:
+        yield Static(id="portfolio-header")
+        yield DataTable(id="portfolio-table", cursor_type="row", zebra_stripes=True)
+
+    def on_mount(self) -> None:
+        # Scannable triage columns first; the wider Title sits last so it can
+        # run on without pushing Status/Links/Recency off-screen (v0.26.2).
+        table = self.query_one(DataTable)
+        table.add_columns("Type", "ID", "Status", "Links", "Recency", "Title")
+
+    def show_portfolio(self, state: PortfolioState) -> None:
+        self._rows = state.rows
+        self._rebuild()
+        self._load_recency()
+
+    def take_focus(self) -> None:
+        self.query_one(DataTable).focus()
+
+    # --- rendering -----------------------------------------------------------
+
+    def _visible(self) -> list[PortfolioRow]:
+        if self._filter == "invalid":
+            return [r for r in self._rows if "✗" in r.status_label]
+        if self._filter == "valid":
+            return [r for r in self._rows if "✗" not in r.status_label]
+        return list(self._rows)
+
+    def _sorted_rows(self) -> list[PortfolioRow]:
+        rows = self._visible()
+        if self._sort == "links":
+            return sorted(rows, key=lambda r: (-r.link_count, r.id))
+        if self._sort == "status":
+            return sorted(rows, key=lambda r: (r.status_label, r.id))
+        if self._sort == "id":
+            return sorted(rows, key=lambda r: r.id)
+        if self._sort == "recency":
+            # Most recent first; artifacts git cannot date sink to the bottom.
+            return sorted(
+                rows,
+                key=lambda r: (
+                    r.path not in self._recency,
+                    _negated_age(self._recency.get(r.path)),
+                ),
+            )
+        return sorted(rows, key=lambda r: (r.type, r.id))  # type (default)
+
+    def _rebuild(self) -> None:
+        table = self.query_one(DataTable)
+        table.clear()
+        dark = self.app.current_theme.dark
+        rows = self._sorted_rows()
+        for row in rows:
+            tag, hue = type_tag(row.type, dark=dark)
+            committed = self._recency.get(row.path)
+            recency = relative_age(committed) if committed is not None else "·"
+            ident = row.id if len(row.id) <= 24 else row.id[:23] + "…"
+            table.add_row(
+                Text(tag, style=f"bold {hue}"),
+                ident,
+                row.status_label,
+                str(row.link_count),
+                recency,
+                Text(row.title or row.id),
+                key=row.path,
+            )
+        scope = f" · {self._filter} only" if self._filter != "all" else ""
+        self.query_one("#portfolio-header", Static).update(
+            f"{len(rows)} of {len(self._rows)} artifacts{scope}"
+            f" · sorted by {self._sort}  ·  s sort · f filter"
+        )
+
+    # --- recency worker (git, off the load path) -----------------------------
+
+    @work(thread=True, exclusive=True, group="portfolio-recency")
+    def _load_recency(self) -> dict[str, datetime]:
+        return self.adapter.recency_index()
+
+    def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        if event.worker.group != "portfolio-recency" or event.state != WorkerState.SUCCESS:
+            return
+        result = event.worker.result
+        if isinstance(result, dict):
+            self._recency = result
+            self._rebuild()  # fill the recency column (and re-sort if by recency)
+
+    # --- interaction ---------------------------------------------------------
+
+    def action_cycle_sort(self) -> None:
+        index = _PORTFOLIO_SORTS.index(self._sort)
+        self._sort = _PORTFOLIO_SORTS[(index + 1) % len(_PORTFOLIO_SORTS)]
+        self._rebuild()
+
+    def action_cycle_filter(self) -> None:
+        index = _PORTFOLIO_FILTERS.index(self._filter)
+        self._filter = _PORTFOLIO_FILTERS[(index + 1) % len(_PORTFOLIO_FILTERS)]
+        self._rebuild()
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        event.stop()
+        path = event.row_key.value
+        if path is not None:
+            self.post_message(OpenArtifact(path))
+
+
+def _negated_age(committed: datetime | None) -> float:
+    # A descending-by-recency sort key: newer (larger timestamp) sorts first.
+    return -committed.timestamp() if committed is not None else 0.0
 
 
 class SettingsView(Vertical):

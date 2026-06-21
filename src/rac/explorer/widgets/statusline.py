@@ -51,6 +51,13 @@ _HINTS: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "import": (("y", "Confirm"), ("Esc", "Back")),
     "stats": (("Esc", "Back"), ("/", "Commands")),
+    "portfolio": (
+        ("⏎", "Open"),
+        ("s", "Sort"),
+        ("f", "Filter"),
+        ("Esc", "Back"),
+        ("/", "Commands"),
+    ),
     "results": (("⏎", "Open"), ("f", "Filter"), ("Esc", "Back"), ("/", "Commands")),
     "settings": (("⏎", "Change"), ("Esc", "Back"), ("/", "Commands")),
     "command": (("⏎", "Run"), ("↑↓", "Choose"), ("Esc", "Close")),

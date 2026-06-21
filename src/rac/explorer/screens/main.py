@@ -41,6 +41,7 @@ from rac.explorer.widgets.views import (
     HomeView,
     ImportView,
     OpenArtifact,
+    PortfolioView,
     RecommendationsView,
     ResultsView,
     SettingsChanged,
@@ -66,6 +67,7 @@ _VIEW_REGIONS = {
     "view-results": ("results", "Results"),
     "view-settings": ("settings", "Settings"),
     "view-stats": ("stats", "Portfolio Stats"),
+    "view-portfolio": ("portfolio", "Portfolio"),
 }
 
 
@@ -120,6 +122,7 @@ class MainScreen(Screen[None]):
                 yield ResultsView()
                 yield SettingsView(self.adapter)
                 yield StatsView(self.adapter)
+                yield PortfolioView(self.adapter)
         yield StatusLine()
         # Floats over the context region on its own layer; hidden when idle.
         yield CommandPalette(self.adapter)
@@ -609,6 +612,13 @@ class MainScreen(Screen[None]):
         elif invocation.command == "stats":
             self.query_one(StatsView).show_stats()
             self.show_view("view-stats")
+        elif invocation.command == "list":
+            state = self.adapter.portfolio_state()
+            if state is None:
+                self._show_message("Repository not loaded yet")
+                return
+            self.query_one(PortfolioView).show_portfolio(state)
+            self.show_view("view-portfolio")
         elif invocation.command == "browse":
             artifact_type = invocation.args.casefold() or None
             if artifact_type is None:
