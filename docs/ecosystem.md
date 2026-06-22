@@ -10,6 +10,7 @@ planned or placeholder entries.
 | RAC dogfood corpus | This repository's own product knowledge — requirements, decisions, roadmaps, prompts, designs — validated in CI by the engine it specifies | [`rac/`](https://github.com/itsthelore/rac-core/tree/main/rac/) |
 | `rac-artifacts` Claude Code skill | A project-level agent skill that teaches Claude Code to create, validate, and update RAC artifacts using the `rac` CLI | [`.claude/skills/rac-artifacts/`](https://github.com/itsthelore/rac-core/blob/main/.claude/skills/rac-artifacts/SKILL.md) |
 | MCP grounding example | A runnable demo showing an agent connected to RAC Guide over MCP respecting a recorded decision that an unconnected agent violates | [`examples/guide/`](https://github.com/itsthelore/rac-core/blob/main/examples/guide/demo.md) |
+| Amp setup | A worked setup connecting Sourcegraph's Amp to RAC — it reads the generated `AGENTS.md` natively and queries the `lore` MCP server | [`examples/amp/`](https://github.com/itsthelore/rac-core/blob/main/examples/amp/README.md) |
 
 ## Adding an entry
 
