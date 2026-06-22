@@ -23,7 +23,7 @@ to the corpus artifact and they load through the imports below.
 - Previous series: `rac/roadmaps/v0.21.x-editor/` (complete)
 - Decisions (ADRs): `rac/decisions/`
 
-<!-- BEGIN RAC MANAGED BLOCK (digest: 4bad6cdd663e91b89aa7b39a27a3d25c33bec751ae167acff6f8eb911df1742d) -->
+<!-- BEGIN RAC MANAGED BLOCK (digest: b69411ed027089c1eda60e0497db694d5d092afaa85969a79d2202f3f38d9703) -->
 <!-- Managed by `rac export --agent-rules`. Edit decisions in rac/, not here; content outside this block is preserved. -->
 ## Settled decisions (RAC)
 
@@ -79,4 +79,5 @@ These decisions are already accepted. Do not re-open or contradict them; ask the
 - **RAC-KVJY1KJEWZ87** — ADR-073: Backend Connectors Are Export-Contract Consumers, Not Per-Provider Repos _(Architecture)_
 - **RAC-KVK19NPWFYC9** — ADR-074: The Graph Export Surfaces Typed Relationship Edges _(Technical)_
 - **RAC-KVNM01QPBPXB** — ADR-075: The Pre-Merge Check Tier Is a Required Merge Gate on `main` _(Process)_
+- **RAC-KVPTVX3YZ87K** — ADR-076: Adopt CalVer (`YYYY.MM.N`) for RAC Releases _(Process)_
 <!-- END RAC MANAGED BLOCK -->
