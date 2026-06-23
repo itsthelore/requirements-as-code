@@ -4,13 +4,13 @@ User-visible changes to RAC, by release. Follows the spirit of
 [Keep a Changelog](https://keepachangelog.com/): user impact over implementation
 details, release history over commit history.
 
-## 2026.06.1
+## 2026.06.4 — the "unlock" release
 
 The first release under **CalVer** (`YYYY.MM.N`, ADR-076): RAC's version now says
 *when* a build was cut, not a SemVer compatibility claim it never kept.
 Compatibility lives on `schema_version` (ADR-007); the roadmap `vX.Y.Z` numbers
 continue as internal planning scope-fences. This is a one-way cutover — every
-prior `vX.Y.Z` tag is retained, and `2026.06.1` supersedes `v0.19.0` as the
+prior `vX.Y.Z` tag is retained, and `2026.06.4` supersedes `v0.19.0` as the
 latest release. It also ships the user-facing work accumulated across the
 v0.23–v0.26 scope-fences:
 
