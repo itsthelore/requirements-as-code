@@ -15,6 +15,11 @@ accepted build. It surveys the option space, recommends a priority order, and
 leaves the editor question recorded as a weighed conclusion rather than a closed
 decision.
 
+It was subsequently extended after a red-team with **Thread E — authoring /
+capture**, which reframes the editor question as a *capture-and-structure*
+problem for non-technical authors and reorders the priorities so capture ranks
+at the top, ahead of grounding.
+
 ## Context
 
 "What should Lore's frontend be?" is the wrong question, because Lore is not
@@ -68,14 +73,21 @@ Three audiences sit behind "frontend," and they want different things:
   Explorer and `rac-localview` already serve.
 - **Maintainers** authoring artifacts need a *low-friction edit→validate→commit
   loop* — without Lore having to become the editor they live in.
+- **Non-technical authors** — the product managers who *own the source
+  knowledge* but work in Word, Google Docs, Confluence, and Jira — need a way to
+  get knowledge into the corpus *at all*, without learning git, markdown, or an
+  IDE. The original draft under-served this audience; it is the subject of
+  Thread E.
 
 The need this design weighs is **where the next unit of frontend effort buys the
 most**, given those three audiences and Lore's recorded identity.
 
 ## Design
 
-The six tools cluster into four threads. Each maps onto Lore differently; the
-recommended priority order follows.
+The six tools cluster into four threads (A–D). A red-team of this design then
+surfaced a fifth — **Thread E, authoring / capture** — that the tool survey had
+hidden behind Thread B; it is recorded after the four and ranks *first* in the
+revised priority order. Each thread maps onto Lore differently.
 
 ### Thread D — Grounding inside agent IDEs *(the recommendation)*
 
@@ -167,15 +179,86 @@ one the maintainer already loves.
   of *meaning* — is real, but Lore's entities are artifacts and its review
   surface is the pull request.
 
+### Thread E — Authoring / capture *(the cold-start precondition — added on red-team)*
+
+Threads A–D were drafted as if the corpus already exists; a red-team exposed
+that assumption. **Grounding (D) is leverage on an asset that has to be authored
+first** — an agent cannot ground against a decision nobody captured — and the
+people who own the source knowledge (product managers) live in Word, Docs,
+Confluence, and Jira, not in an IDE or an agent harness. The original draft
+under-weighted this by collapsing authoring into Thread B and then correctly
+dismissing the *wrong* UI: the barrier is **not** *editing markdown* (an editor
+question, answered "don't build one"), it is **capture-and-structure** — getting
+unstructured knowledge out of a PM's head and tools into a typed, validated
+artifact. Capture is therefore reframed as a first-class thread and ranked above
+grounding, because **grounding's authority-of-record moat is hostage to how
+complete and current the corpus is**: a thin or stale record grounds agents on
+confidently-wrong guidance, which is worse than no record.
+
+The shape that stays inside the recorded decisions:
+
+> **Capture** (where the author already is) → **Structure** (a template-driven
+> form or an agent interview, with any AI *outside* the deterministic core) →
+> **Save** (a commit) → **Promote** (the PR review boundary into the trusted
+> corpus).
+
+- **The interpretation step lives outside core (ADR-002, ADR-067).** Format
+  conversion is deterministic (markitdown, ADR-072); turning *freeform prose*
+  into a *typed, sectioned, linked* artifact requires classification, which the
+  deterministic core must not perform. The AI-assisted draft is a companion —
+  the same one-way pattern as `lore-supermemory-interplay`, never engine code.
+- **Save is a commit; only promotion to the trusted corpus is a PR (refines
+  ADR-065).** ADR-065 places the trust boundary at human PR review *into the
+  agent-grounding corpus*, and explicitly treats "unreviewed branches" and
+  "machine-ingested documents not yet merged" as legitimate — merely *untrusted*
+  — states. So a capture surface may **commit drafts freely** to a working branch
+  or a `drafts/` area with no PR ceremony; the PR gate is reserved for the moment
+  a draft is *promoted* into the reviewed corpus an agent grounds against. This
+  keeps authoring low-friction without weakening the boundary.
+- **Capture knowledge, not work (ADR-017).** A connector extracts the durable
+  decision or long-lived requirement (ADR-020) from a ticket or doc; it never
+  mirrors owners, sprints, or workflow state.
+
+Four implementation options, cheapest first:
+
+1. **Agent-interview authoring** *(ship first; near-zero build)* — a skill/prompt
+   ("record a decision") that interviews the author in plain language, dedupes
+   via `search_artifacts`, drafts against the template (ADR-021), and commits the
+   draft or opens the promotion PR. Reuses `rac-artifacts` / `rac-import`,
+   templates, and the `lore` MCP. The author talks, reviews, and approves —
+   never touching markdown or git. Compounds with Thread D (the same surface now
+   also *seeds* the corpus).
+2. **Self-serve ingestion** *(meet them in Word)* — make `rac ingest`
+   self-service via an `/intake` GitHub Action (drop a `.docx` / `.pdf` →
+   markitdown → an AI classify-and-structure companion → a draft commit /
+   proposal). Reuses the `rac-ingest` skill and the already-designed
+   `explorer-import-workflow` (detect → review → confirm).
+3. **Guided web capture** *(the real non-technical front door; bigger build)* —
+   extend `rac-localview` from viewer to viewer + capture: pick a type, fill a
+   **template-driven form** (the form *is* the template, ADR-021 — not a freeform
+   editor, which sidesteps the person-years cost), preview, and commit / propose
+   via the GitHub API. The GitBook middle path the research endorsed; git stays
+   the source of truth (ADR-024).
+4. **Tracker connectors** *(defer; ADR-gated)* — one-way knowledge extraction
+   from Jira / Linear / Confluence in `lore-connectors`, extracting durable
+   knowledge only. This is the easiest place to breach ADR-017, so it requires an
+   explicit new ADR reaffirming the knowledge-not-work boundary before it is
+   built.
+
 ### Recommended priority order
 
-1. **Grounding distribution (D)** — highest leverage, near-zero build, reinforces
-   identity. The recommendation.
-2. **Authoring-flow enrichment, not an editor (B)** — stay BYO-editor; if
-   anything, invest in templates + validate-on-save + diff-at-commit.
-3. **Live desktop wrapper (A)** — optional; Tauri v2 directly, repo-watching
+1. **Authoring / capture (E)** — the cold-start precondition. Start with the
+   near-zero-build agent-interview skill and the `/intake` action. Without it the
+   corpus stays thin and there is little for Thread D to serve.
+2. **Grounding distribution (D)** — highest leverage *once there is a corpus to
+   ground against*; near-zero build, reinforces identity. E and D compound — the
+   same surface that grounds can also capture.
+3. **Authoring-flow enrichment, not an editor (B)** — for IDE-resident
+   maintainers, stay BYO-editor; if anything, templates + validate-on-save +
+   diff-at-commit.
+4. **Live desktop wrapper (A)** — optional; Tauri v2 directly, repo-watching
    variant only, Linux as the risk surface.
-4. **lix (C)** — inspiration / watch only; do not adopt.
+5. **lix (C)** — inspiration / watch only; do not adopt.
 
 ## Constraints
 
@@ -185,9 +268,13 @@ one the maintainer already loves.
 - **RAC is not a content store (ADR-024).** Frontends view, navigate, ground, and
   link back to artifacts on disk; they do not become the canonical home of
   content.
-- **The trust boundary is human PR review (ADR-065).** The "review the diff
-  before it lands" ritual belongs to the git PR, not to an in-app editor's own
-  approval flow.
+- **The trust boundary is human PR review *into the corpus* (ADR-065) — but a
+  save is a commit, not a PR.** ADR-065 names "unreviewed branches" and
+  not-yet-merged drafts as legitimate, untrusted states, so a capture surface may
+  commit drafts freely; the PR gate applies only to *promoting* a draft into the
+  reviewed corpus an agent grounds against. The "review the diff before it lands"
+  ritual belongs to that promotion PR, not to an in-app editor's own approval
+  flow.
 - **Recency and history come from git (ADR-045), pipelines are file-first
   (ADR-011).** A second change-control engine (lix) is redundant for markdown and
   conflicts with these.
@@ -247,10 +334,16 @@ contract, the validation, and the grounding that actually differentiate it.
 - **A static-only desktop shell — rejected.** It adds little over
   `rac export --html` opening in a browser. Only a *live*, repo-watching variant
   would justify the surface.
+- **Treat authoring as an editor problem (the original draft's framing) —
+  rejected on red-team.** Asking "should Lore build an editor?" answers the wrong
+  question and dismisses the wrong UI; the non-technical author's barrier is
+  capture-and-structure, not text entry. Thread E replaces this framing.
 - **Do nothing (the honest baseline).** Lore's five surfaces already cover the
-  three audiences. Acceptable until the grounding-distribution story (Thread D)
-  is worth scheduling — which is the signal that would open a future roadmap
-  item, not this design.
+  agent, human-reader, and IDE-maintainer audiences. Acceptable *only* if the
+  corpus is already being authored — but the red-team's point is that the
+  non-technical author is locked out today, so for a cold-start corpus "do
+  nothing" silently bets the corpus stays the domain of a few technical
+  maintainers.
 
 ## Accessibility
 
@@ -295,21 +388,38 @@ contract, the validation, and the grounding that actually differentiate it.
 - Should Thread D's distribution work be promoted to a non-versioned
   `rac/roadmaps/future/` item once there is evidence agents are under-grounded for
   lack of easy registration?
+- For **capture (Thread E)**, where do drafts live before promotion — a
+  `drafts/` path, an `/intake` branch, or a fork — and what is the lightest
+  review that still satisfies ADR-065's boundary for a solo maintainer versus a
+  team?
+- How good must the freeform→typed **classify pass** be before self-serve
+  ingestion (Options 2–3) is trustworthy enough to expose to a non-technical
+  author, and how are its mistakes surfaced for human review rather than hidden?
+- Does Thread E warrant its own dedicated design and a future roadmap item, or
+  does recording it here as the top-priority thread suffice until a build is
+  scheduled?
 
 ## Related Decisions
 
+- ADR-002
 - ADR-005
+- ADR-006
 - ADR-007
 - ADR-011
+- ADR-017
+- ADR-020
+- ADR-021
 - ADR-024
 - ADR-028
 - ADR-029
 - ADR-030
+- ADR-044
 - ADR-045
 - ADR-063
 - ADR-065
 - ADR-067
 - ADR-068
+- ADR-072
 
 ## Related Roadmaps
 
