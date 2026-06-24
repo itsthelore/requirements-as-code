@@ -78,11 +78,14 @@ human-declared (ADR-074, ADR-065, ADR-082).
 
 ## Risks
 
-- Verifying-evidence references rot as tests move or are renamed, so a capability
-  reads as verified when its evidence no longer exists. Mitigation: references
-  are surfaced for human review like any reference; staleness of external evidence
-  is a freshness concern (`freshness-and-drift-detection`), not solved here, and
-  the reference is advisory.
+- Verifying-evidence references rot as tests change, move, or are renamed, so a
+  capability reads as verified when its evidence no longer verifies it. Mitigation:
+  in-repo evidence drift is owned by `freshness-and-drift-detection` Initiative 2,
+  which explicitly covers `## Verified By` asset references — when a cited test file
+  changes in a commit while the capability does not, the capability is flagged
+  "suspect". A missing in-repo path is surfaced by the broken-reference check here;
+  the reference is advisory throughout. (External `url`-kind evidence is git-invisible
+  and offline-unverifiable, so it is out of scope, ADR-002.)
 - Teams treat an `unverified-capability` gap as an error and manufacture
   low-value tests to clear it. Mitigation: REQ-005 keeps the gap advisory and out
   of the enforcement gate; it is a signal, not a quota.

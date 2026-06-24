@@ -65,6 +65,19 @@ Pure git-diff over the validated relationship graph; no model, no embeddings. It
 can run advisory in `rac doctor`/`review` or as a CI gate (ADR-075), the team's
 choice.
 
+This drift gate also covers **asset references**, and specifically the
+`## Verified By` evidence links of the capability-verification work (ADR-084,
+`rac-capability-verification-evidence`). Those links ride the asset-reference rail,
+*not* the relationship graph, so they are explicitly in scope here: when an in-repo
+test file a capability cites as verifying evidence changes in a commit while the
+capability does not, the capability is flagged "suspect" — its recorded
+verification may be stale. This is the deterministic owner of the evidence-rot
+concern the verification requirement and design defer to freshness (a capability
+reading "verified" while its test changed underneath it is false confidence, the
+exact trust-collapse-from-staleness this item exists to prevent). External
+(`url`-kind) evidence is out of scope — git cannot see it, and the core is offline
+(ADR-002).
+
 ### Initiative 3 — Freshness biases surfacing
 
 A stale-flagged artifact is surfaced for review (in `review`/`doctor`/coverage) and
@@ -119,8 +132,14 @@ actually changes what readers and agents see.
 - adr-065
 - adr-074
 - adr-066
+- adr-084
 
 ## Related Requirements
 
 - rac-traceability-coverage-report
 - rac-doctor-diagnostic-validator
+- rac-capability-verification-evidence
+
+## Related Roadmaps
+
+- capability-verification-coverage
