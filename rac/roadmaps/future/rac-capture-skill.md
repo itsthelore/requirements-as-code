@@ -14,6 +14,11 @@ concrete build proposed by the `lore-capture-surfaces` design (Host A); it is a
 near-zero-build item gated only on the decision to start, and it must not
 displace nearer-term committed work.
 
+**Update — Initiative 1 (the `rac-capture` skill) shipped** (merged in PR #193).
+The roadmap stays `Planned` rather than `Achieved` because Initiatives 2–3 (the
+host surfaces) remain deferred; this records that the shared capture core now
+exists.
+
 ## Context
 
 `lore-frontend-optionality` established that Lore's binding constraint is
@@ -56,7 +61,7 @@ of scope here — they wrap this same skill later.
 
 ## Initiatives
 
-### Initiative 1 — The `rac-capture` skill
+### Initiative 1 — The `rac-capture` skill *(delivered, PR #193)*
 
 Author `src/rac/skills/rac-capture/SKILL.md` as the interview variant of
 `rac-import`, reusing the same CLI seams (`rac schema`, `rac inspect`, `rac new`,
