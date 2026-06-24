@@ -24,9 +24,13 @@ boundary it keeps with Lore, so neither side drifts into the other.
 
 `lore-verify` is a **contract consumer of Lore, not an extension of the engine**:
 
-- It learns *what to verify* by reading the published Lore contract — `rac export
-  --graph` and the `lore` MCP read tools — never RAC engine internals and never
-  the host repo's `.rac/` namespace (RAC ADR-063).
+- It learns *what to verify* from `rac export --graph` — specifically the
+  `asset_edges` projection that carries verifying-evidence references (RAC ADR-084)
+  — which is the single source of the verification worklist. The `lore` MCP read
+  tools (RAC ADR-030 / ADR-067) serve *artifact-level* reads (fetch a capability's
+  text, search) and do **not** return the worklist; `lore-verify` uses them only to
+  read an individual artifact, not to discover unverified capabilities. It never
+  touches RAC engine internals or the host repo's `.rac/` namespace (RAC ADR-063).
 - It writes back *only by proposing* `## Verified By` references in a
   human-reviewed pull request; a human ratifies and merges (RAC ADR-065). It never
   writes a corpus directly.
@@ -47,8 +51,13 @@ produces and runs the evidence.**
 The product can be developed and extracted without coupling to the engine, and
 Lore stays a deterministic, offline knowledge engine with no test runtime. The
 cost is a thin contract seam to maintain on both sides; it is versioned and
-additive (RAC ADR-007), and `lore-verify` pins a published major rather than
-tracking internals.
+additive (RAC ADR-007), and `lore-verify` pins the `--graph` projection's
+`schema_version` (RAC ADR-084) rather than tracking internals. There is no SemVer
+"major" to pin — RAC adopted CalVer (`YYYY.MM.N`), which carries no compatibility
+signal (RAC ADR-076), so the projection's `schema_version` is the only correct
+compatibility axis: the consumer reads it and degrades (treats asset-edge data as
+unavailable) or fails closed on an unrecognised version, never silently
+mis-reading the worklist.
 
 ## Status
 
@@ -71,3 +80,5 @@ Product
 ## Related Decisions
 
 - lv-adr-002-pluggable-runner
+- lv-adr-003-runtime-threat-model
+- lv-adr-004-ci-topology

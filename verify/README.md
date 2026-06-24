@@ -16,8 +16,10 @@ replayable trace artifacts you can review without running anything locally.
 `lore-verify` is a **contract consumer of Lore, not an extension of the engine**
 (see `rac/decisions/lv-adr-001-product-identity.md`):
 
-- It learns *what to verify* from the published Lore contract (`rac export
-  --graph`, the `lore` MCP read tools) — never RAC engine internals.
+- It learns *what to verify* from `rac export --graph` (the `asset_edges`
+  worklist of capabilities lacking a `verified-by` edge) — never RAC engine
+  internals. The `lore` MCP read tools serve only artifact-level reads, not the
+  worklist.
 - It writes back **only by proposing** `## Verified By` references in a
   human-reviewed pull request. It never writes a corpus directly.
 - It owns all runtime and content (driving the browser/terminal, running tests,
