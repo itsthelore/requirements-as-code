@@ -180,3 +180,22 @@ button.primary {
   opacity: 0.9;
   word-break: break-all;
 }
+.dest {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  font-size: 11px;
+  opacity: 0.6;
+}
+.dest-branch {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.dest-sep {
+  opacity: 0.5;
+}
+.dest-mode {
+  margin-left: auto;
+}

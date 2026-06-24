@@ -1,7 +1,7 @@
-use crate::config::RepoConfig;
+use crate::config::{RepoConfig, WriteMode};
 use crate::error::CaptureError;
 use crate::gateway::Gateway;
-use crate::github::{PrResult, ProposalRequest, Publisher};
+use crate::github::{CommitRequest, PrRequest, PrResult, Publisher};
 use crate::rac::Rac;
 
 /// A proposed artifact, produced from raw intent, awaiting the author's fidelity
@@ -13,13 +13,20 @@ pub struct Proposal {
     pub body: String,
 }
 
-/// The result of publishing a confirmed proposal: a **draft** pull request. It is
-/// not landed — an independent maintainer's merge is the trust boundary (Gate 2).
+/// The result of publishing a confirmed proposal. The artifact is committed to a
+/// branch and, unless the write mode is `Direct`, proposed as a **draft** pull
+/// request. It is never landed — an independent maintainer's merge is the trust
+/// boundary (Gate 2).
 #[derive(Clone, Debug)]
 pub struct CaptureOutcome {
     pub path: String,
     pub minted_id: String,
-    pub pr: PrResult,
+    /// The branch the artifact was committed to.
+    pub branch: String,
+    /// How it landed.
+    pub mode: WriteMode,
+    /// The draft PR, when the mode opens one (`None` for `Direct`).
+    pub pr: Option<PrResult>,
 }
 
 /// Orchestrates the capture flow over the three seams. Generic over the traits so
@@ -45,6 +52,11 @@ impl<R: Rac, G: Gateway, P: Publisher> CaptureFlow<R, G, P> {
         &self.repo
     }
 
+    /// Borrow the publisher — lets a host (or a test) inspect the write seam.
+    pub fn publisher(&self) -> &P {
+        &self.publisher
+    }
+
     /// Gate-1 preparation: turn raw `intent` into a [`Proposal`]. Reads the real
     /// schema and drafts through the gateway. No file is written, nothing is
     /// pushed — the author reviews the proposal next.
@@ -60,13 +72,16 @@ impl<R: Rac, G: Gateway, P: Publisher> CaptureFlow<R, G, P> {
 
     /// After the author confirms the proposal is faithful (Gate 1), scaffold the
     /// file (minting the id), fill the body while keeping the frontmatter,
-    /// validate, and open a **draft** pull request. Refuses to proceed if the
+    /// validate, and commit it to `branch`. Then, unless `mode` is `Direct`,
+    /// ensure a **draft** pull request — reusing an open one in `Rolling` mode so
+    /// successive captures share a single batch PR. Refuses to proceed if the
     /// publisher ever returns a non-draft PR (Gate 2 is the independent merge).
     pub fn publish(
         &self,
         proposal: &Proposal,
         dest_path: &str,
         branch: &str,
+        mode: WriteMode,
         coauthor_trailer: Option<&str>,
     ) -> Result<CaptureOutcome, CaptureError> {
         let stdout = self.rac.new_artifact(&proposal.artifact_type, dest_path)?;
@@ -81,36 +96,59 @@ impl<R: Rac, G: Gateway, P: Publisher> CaptureFlow<R, G, P> {
         // Deterministic close before we propose anything.
         self.rac.validate(dest_path)?;
 
-        let mut pr_body = format!(
-            "Proposed via the Lore capture overlay. Fidelity confirmed by the author; this is a \
-             **draft** awaiting an independent maintainer's review and merge (ADR-077).\n\n\
-             Artifact: `{path}` ({id})\n",
-            path = dest_path,
-            id = minted_id
-        );
-        if let Some(trailer) = coauthor_trailer {
-            pr_body.push('\n');
-            pr_body.push_str(trailer);
-            pr_body.push('\n');
-        }
-
-        let req = ProposalRequest {
+        // Save is a commit (ADR-077): the artifact lands on a branch first.
+        self.publisher.commit_file(&CommitRequest {
             branch: branch.to_string(),
+            base_branch: self.repo.base_branch.clone(),
             path: dest_path.to_string(),
             content: filled,
-            commit_message: format!("capture: propose {}", proposal.title),
-            pr_title: format!("capture: {}", proposal.title),
-            pr_body,
+            message: format!("capture: propose {}", proposal.title),
+        })?;
+
+        // Promotion is a PR — its granularity follows the write mode. `Direct`
+        // skips it (a solo repo with no independent reviewer); the others ensure
+        // a draft PR, which `Rolling` shares across captures as a batch.
+        let pr = match mode {
+            WriteMode::Direct => None,
+            WriteMode::PerCapture | WriteMode::Rolling => {
+                let mut pr_body = format!(
+                    "Proposed via the Lore capture overlay. Fidelity confirmed by the author; \
+                     this is a **draft** awaiting an independent maintainer's review and merge \
+                     (ADR-077).\n\nArtifact: `{path}` ({id})\n",
+                    path = dest_path,
+                    id = minted_id
+                );
+                if let Some(trailer) = coauthor_trailer {
+                    pr_body.push('\n');
+                    pr_body.push_str(trailer);
+                    pr_body.push('\n');
+                }
+                // A stable title in `Rolling` so the same batch PR is recognisable.
+                let pr_title = match mode {
+                    WriteMode::Rolling => "capture: proposed artifacts (batch)".to_string(),
+                    _ => format!("capture: {}", proposal.title),
+                };
+                let pr = self.publisher.ensure_draft_pr(&PrRequest {
+                    branch: branch.to_string(),
+                    base_branch: self.repo.base_branch.clone(),
+                    title: pr_title,
+                    body: pr_body,
+                })?;
+                if !pr.draft {
+                    return Err(CaptureError::Publish(
+                        "refusing to proceed: capture must open a DRAFT pull request (ADR-077)"
+                            .into(),
+                    ));
+                }
+                Some(pr)
+            }
         };
-        let pr = self.publisher.open_draft_pr(&req)?;
-        if !pr.draft {
-            return Err(CaptureError::Publish(
-                "refusing to proceed: capture must open a DRAFT pull request (ADR-077)".into(),
-            ));
-        }
+
         Ok(CaptureOutcome {
             path: dest_path.to_string(),
             minted_id,
+            branch: branch.to_string(),
+            mode,
             pr,
         })
     }

@@ -13,9 +13,12 @@
 //!   [`Proposal`] the author confirms in the host UI. This is a data-quality
 //!   check, not a trust boundary; no file is written and nothing is pushed.
 //! - **Gate 2 — trust boundary.** [`CaptureFlow::publish`] writes the artifact,
-//!   validates it, and opens a **draft** pull request. The independent
-//!   maintainer's merge is the trust boundary. The [`Publisher`] trait has no
-//!   approve/merge method by construction — the host can only *propose*.
+//!   validates it, commits it to a branch, and (unless the [`WriteMode`] is
+//!   `Direct`) ensures a **draft** pull request. The independent maintainer's
+//!   merge is the trust boundary. The PR's *granularity* is configurable —
+//!   per-capture, a rolling batch, or none — but the [`Publisher`] trait has no
+//!   approve/merge method by construction, so the host can only *propose* in
+//!   every mode.
 //!
 //! The model call (gateway) and git writes (publisher) live behind traits so the
 //! core is testable offline; the concrete network implementations are compiled
@@ -28,11 +31,11 @@ mod gateway;
 mod github;
 mod rac;
 
-pub use config::{Config, GatewayConfig, RepoConfig};
+pub use config::{Config, GatewayConfig, RepoConfig, WriteMode};
 pub use error::CaptureError;
 pub use flow::{parse_minted_id, CaptureFlow, CaptureOutcome, Proposal};
 pub use gateway::{DraftedArtifact, Gateway};
-pub use github::{PrResult, ProposalRequest, Publisher};
+pub use github::{CommitRequest, CommitResult, PrRequest, PrResult, Publisher};
 pub use rac::{Rac, RacClient};
 
 #[cfg(feature = "net")]

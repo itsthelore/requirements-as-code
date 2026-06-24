@@ -15,6 +15,19 @@ const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
 const $ = (id) => document.getElementById(id);
 let current = null; // the proposed { artifact_type, title, body }
 
+// Show where captures land (repo · branch · mode) as a read-only footer.
+(async () => {
+  try {
+    const t = await invoke("capture_target");
+    $("dest-repo").textContent = t.repo;
+    $("dest-branch").textContent = t.branch;
+    $("dest-mode").textContent = t.mode;
+    $("dest").hidden = false;
+  } catch {
+    // No config yet (e.g. first run) — leave the footer hidden.
+  }
+})();
+
 $("propose").addEventListener("click", async () => {
   const intent = $("intent").value.trim();
   if (!intent) return;
@@ -73,18 +86,23 @@ $("publish").addEventListener("click", async () => {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "")
     .slice(0, 60);
-  setResult("Opening a draft pull request…");
+  setResult("Saving…");
   try {
-    // Gate 2 prep: write + validate + open a DRAFT PR (independent merge lands it).
+    // Gate 2 prep: write + validate + commit, and (unless Direct) a DRAFT PR.
+    // The branch + PR granularity is decided by the configured write mode.
     const outcome = await invoke("publish", {
       artifactType: current.artifact_type,
       title,
       body,
       destPath: `rac/decisions/${slug}.md`,
-      branch: `capture/${slug}`,
+      slug,
       coauthor: null,
     });
-    setResult(`Proposed as ${outcome.minted_id} — review & merge: ${outcome.pr_url}`);
+    setResult(
+      outcome.pr_url
+        ? `Proposed as ${outcome.minted_id} on ${outcome.branch} — review & merge: ${outcome.pr_url}`
+        : `Committed ${outcome.minted_id} to ${outcome.branch} (no PR — ${outcome.mode}).`
+    );
   } catch (e) {
     setResult("Couldn't publish: " + e);
   }

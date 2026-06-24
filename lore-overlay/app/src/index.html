@@ -46,6 +46,15 @@
       </section>
 
       <p id="result" role="status"></p>
+
+      <!-- Read-only: where this capture will land (repo · branch · mode). -->
+      <footer id="dest" class="dest" hidden>
+        <span class="dest-repo" id="dest-repo"></span>
+        <span class="dest-sep">·</span>
+        <span class="dest-branch" id="dest-branch"></span>
+        <span class="dest-sep">·</span>
+        <span class="dest-mode" id="dest-mode"></span>
+      </footer>
     </main>
     <script type="module" src="main.js"></script>
   </body>

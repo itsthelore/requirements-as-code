@@ -12,7 +12,7 @@
 
 use lore_capture_core::{
     CaptureFlow, Config, GatewayConfig, GithubPublisher, OpenAiGateway, Proposal, RacClient,
-    RepoConfig,
+    RepoConfig, WriteMode,
 };
 use tauri::{Manager, WebviewWindow};
 
@@ -35,6 +35,33 @@ fn load_config() -> Config {
         },
         hotkey: std::env::var("LORE_HOTKEY").unwrap_or_else(|_| "CmdOrCtrl+Shift+L".into()),
         rac_command: std::env::var("LORE_RAC").unwrap_or_else(|_| "rac".into()),
+        write_mode: match std::env::var("LORE_WRITE_MODE").as_deref() {
+            Ok("per-capture") => WriteMode::PerCapture,
+            Ok("direct") => WriteMode::Direct,
+            _ => WriteMode::Rolling, // default: batch draft PR
+        },
+        capture_branch: std::env::var("LORE_CAPTURE_BRANCH")
+            .unwrap_or_else(|_| "capture/inbox".into()),
+    }
+}
+
+/// The branch a capture in the current mode targets (for `PerCapture`, the slug
+/// is appended at publish time, so this is a label).
+fn target_branch(cfg: &Config, slug: Option<&str>) -> String {
+    match cfg.write_mode {
+        WriteMode::PerCapture => match slug {
+            Some(s) => format!("capture/{s}"),
+            None => "capture/<per-capture>".to_string(),
+        },
+        WriteMode::Rolling | WriteMode::Direct => cfg.capture_branch.clone(),
+    }
+}
+
+fn mode_label(mode: WriteMode) -> &'static str {
+    match mode {
+        WriteMode::PerCapture => "draft PR per capture",
+        WriteMode::Rolling => "batch draft PR",
+        WriteMode::Direct => "commit only",
     }
 }
 
@@ -52,12 +79,7 @@ fn build_flow(cfg: &Config) -> CaptureFlow<RacClient, OpenAiGateway, GithubPubli
     CaptureFlow::new(
         RacClient::new(cfg.rac_command.clone()),
         OpenAiGateway::new(&cfg.gateway),
-        GithubPublisher::new(
-            cfg.repo.owner.clone(),
-            cfg.repo.repo.clone(),
-            cfg.repo.base_branch.clone(),
-            github_token(),
-        ),
+        GithubPublisher::new(cfg.repo.owner.clone(), cfg.repo.repo.clone(), github_token()),
         cfg.repo.clone(),
     )
 }
@@ -90,11 +112,36 @@ fn propose(artifact_type: String, intent: String) -> Result<ProposalView, String
 struct OutcomeView {
     path: String,
     minted_id: String,
+    branch: String,
+    mode: String,
     pr_url: String,
 }
 
-/// Gate 2 prep: after the author confirms, write + validate + open a DRAFT pull
-/// request. The core refuses any non-draft PR; the independent merge is Gate 2.
+/// A read-only view of where the next capture will land, for the modal's footer.
+#[derive(serde::Serialize)]
+struct TargetView {
+    repo: String,
+    branch: String,
+    mode: String,
+    opens_pr: bool,
+}
+
+/// Where a capture lands under the current config — repo, branch, and mode.
+#[tauri::command]
+fn capture_target() -> TargetView {
+    let cfg = load_config();
+    TargetView {
+        repo: format!("{}/{}", cfg.repo.owner, cfg.repo.repo),
+        branch: target_branch(&cfg, None),
+        mode: mode_label(cfg.write_mode).to_string(),
+        opens_pr: cfg.write_mode != WriteMode::Direct,
+    }
+}
+
+/// Gate 2 prep: after the author confirms, write + validate + commit, and (unless
+/// the mode is `Direct`) ensure a DRAFT pull request. The core refuses any
+/// non-draft PR; the independent merge is Gate 2. `slug` derives the per-capture
+/// branch; it is ignored in rolling/direct modes.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn publish(
@@ -102,7 +149,7 @@ fn publish(
     title: String,
     body: String,
     dest_path: String,
-    branch: String,
+    slug: String,
     coauthor: Option<String>,
 ) -> Result<OutcomeView, String> {
     let cfg = load_config();
@@ -112,13 +159,16 @@ fn publish(
         title,
         body,
     };
+    let branch = target_branch(&cfg, Some(&slug));
     let outcome = flow
-        .publish(&proposal, &dest_path, &branch, coauthor.as_deref())
+        .publish(&proposal, &dest_path, &branch, cfg.write_mode, coauthor.as_deref())
         .map_err(|e| e.to_string())?;
     Ok(OutcomeView {
         path: outcome.path,
         minted_id: outcome.minted_id,
-        pr_url: outcome.pr.url,
+        branch: outcome.branch,
+        mode: mode_label(outcome.mode).to_string(),
+        pr_url: outcome.pr.map(|p| p.url).unwrap_or_default(),
     })
 }
 
@@ -158,7 +208,7 @@ pub fn run() {
             // steals focus from the app the author is working in.
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![propose, publish])
+        .invoke_handler(tauri::generate_handler![propose, publish, capture_target])
         .run(tauri::generate_context!())
         .expect("error while running the Lore capture overlay");
 }
