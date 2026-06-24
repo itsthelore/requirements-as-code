@@ -1,0 +1,66 @@
+:root {
+  color-scheme: light dark;
+  font: 14px/1.5 system-ui, -apple-system, sans-serif;
+}
+body {
+  margin: 0;
+}
+#app {
+  padding: 16px 18px;
+}
+h1 {
+  font-size: 16px;
+  margin: 0 0 10px;
+}
+textarea,
+input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+}
+label {
+  display: block;
+  margin: 8px 0;
+  font-weight: 600;
+}
+label input,
+label textarea {
+  margin-top: 4px;
+  font-weight: 400;
+}
+.row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+button {
+  font: inherit;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+button.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+.hint {
+  font-size: 12px;
+  opacity: 0.8;
+  margin: 0 0 8px;
+}
+#result {
+  margin-top: 12px;
+  font-size: 13px;
+  opacity: 0.9;
+  word-break: break-all;
+}
