@@ -9,9 +9,12 @@ exposes to the MCP get_summary tool.
 from __future__ import annotations
 
 from rac.core.relationship_types import REGISTRY, edge_spec
+from rac.services.export import build_graph_export
 from rac.services.portfolio import build_portfolio_summary
 from rac.services.relationships import (
+    ISSUE_EDGE_UNSUPPORTED,
     ISSUE_RELATIONSHIP_CYCLE,
+    ISSUE_TARGET_NOT_FOUND,
     ISSUE_TARGET_SUPERSEDED,
     ISSUE_TARGET_TYPE_MISMATCH,
     validate_relationships,
@@ -48,6 +51,7 @@ def test_registry_declares_built_in_edges():
         "related_prompts",
         "related_designs",
         "supersedes",
+        "verified_by",
     }
     supersedes = edge_spec("supersedes")
     assert supersedes is not None
@@ -55,6 +59,77 @@ def test_registry_declares_built_in_edges():
     assert supersedes.forbids_target_status is False  # the exemption is data-driven
     assert edge_spec("related_decisions").range == ("decision",)
     assert edge_spec("related_decisions").forbids_target_status is True
+
+
+def test_registry_declares_verified_by_as_external_target():
+    # The first external-target edge (ADR-084): directional capability -> verifier,
+    # no corpus range, inverse "verifies", and never status-checked.
+    verified_by = edge_spec("verified_by")
+    assert verified_by is not None
+    assert verified_by.external_target is True
+    assert verified_by.directional is True
+    assert verified_by.symmetric is False
+    assert verified_by.inverse == "verifies"
+    assert verified_by.range == ()
+    assert verified_by.forbids_target_status is False
+    # The other built-ins stay corpus-resolving.
+    assert all(not spec.external_target for name, spec in REGISTRY.items() if name != "verified_by")
+
+
+# --- external-target relationships: verified_by (ADR-084) --------------------
+
+
+def test_verified_by_external_reference_validates_clean(tmp_path):
+    # A capability points ## Verified By at external tests/traces, not corpus
+    # artifacts. These never resolve, and that is the expected case — no
+    # relationship-target-not-found, no range or status finding.
+    _write(
+        tmp_path / "cap.md",
+        _req("Login", "\n## Verified By\n\n- e2e/login.spec.ts\n- traces/login.zip\n"),
+    )
+    report = validate_relationships(str(tmp_path))
+    assert report.issues == []
+
+
+def test_verified_by_is_an_unresolved_directed_graph_edge(tmp_path):
+    # The link is still a *typed* edge in the graph export (ADR-074): directed
+    # (capability -> verifier), resolved False, literal target preserved.
+    _write(
+        tmp_path / "cap.md",
+        _req("Login", "\n## Verified By\n\n- e2e/login.spec.ts\n"),
+    )
+    graph = build_graph_export(str(tmp_path))
+    verified = [e for e in graph.edges if e.type == "verified_by"]
+    assert len(verified) == 1
+    edge = verified[0]
+    assert edge.target == "e2e/login.spec.ts"
+    assert edge.directed is True
+    assert edge.resolved is False
+    # An external target never becomes a node.
+    assert "e2e/login.spec.ts" not in {n.id for n in graph.nodes}
+
+
+def test_external_exemption_is_edge_specific(tmp_path):
+    # Adjacency boundary: the SAME external path under a corpus-resolving section
+    # (## Related Decisions) still errors. Only verified_by is exempt.
+    _write(
+        tmp_path / "cap.md",
+        _req("Login", "\n## Related Decisions\n\n- e2e/login.spec.ts\n"),
+    )
+    report = validate_relationships(str(tmp_path))
+    assert ISSUE_TARGET_NOT_FOUND in codes(report)
+
+
+def test_verified_by_unsupported_on_a_decision(tmp_path):
+    # verified_by is legal only on requirements (capabilities, ADR-020). On a
+    # decision it is a declared-but-unsupported edge — surfaced, not silently
+    # dropped — and never a target-not-found error.
+    _write(tmp_path / "a.md", _dec("A", extra="\n## Verified By\n\n- e2e/x.spec.ts\n"))
+    report = validate_relationships(str(tmp_path))
+    assert ISSUE_EDGE_UNSUPPORTED in codes(report)
+    assert ISSUE_TARGET_NOT_FOUND not in codes(report)
+    issue = next(i for i in report.issues if i.code == ISSUE_EDGE_UNSUPPORTED)
+    assert issue.relationship == "verified_by"
 
 
 # --- range -------------------------------------------------------------------
