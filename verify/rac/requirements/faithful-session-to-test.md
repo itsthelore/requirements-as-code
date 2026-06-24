@@ -59,6 +59,12 @@ load-bearing engineering).
 - lv-adr-001-product-identity
 - lv-adr-002-pluggable-runner
 
+## Related Requirements
+
+- evidence-redaction-and-secret-hygiene
+- production-target-safety
+
 ## Related Designs
 
 - drive-compile-run-architecture
+- runner-interface-and-target-config
