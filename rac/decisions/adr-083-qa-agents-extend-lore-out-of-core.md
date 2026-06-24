@@ -69,7 +69,16 @@ knowledge-versus-work line, in three parts:
    `rac export` and the `lore` MCP read tools (ADR-063, ADR-067) to learn which
    capabilities to verify, and proposes verifying-evidence references back into the
    corpus through normal human PR review (ADR-065) — it never writes the corpus
-   directly. If it is an installed product it takes a `lore-*` name (ADR-068).
+   directly. The product is named **`lore-verify`** and takes the `lore-*` prefix
+   (ADR-068) — a deliberate contrast with Wayfinder: Wayfinder earned an independent
+   brand by having *zero* runtime dependency on RAC (ADR-069), whereas `lore-verify`
+   is a contract-dependent companion (useless without a Lore corpus to verify), so it
+   stays in the Lore family. It is a **clean build**, not a fork of any prototype, and
+   following ADR-064's safety contract it is prototyped in a `verify/` subproject
+   inside `rac-core` — carrying its **own self-contained corpus** (its own `LV-`
+   artifacts, packaging, and tests) and no dependency on engine internals — then
+   extracted to `itsthelore/lore-verify` once it ships. The build is sequenced in the
+   `lore-verify-programme` roadmap.
 
 3. **The commercial surface is verification *governance*, not test execution.**
    Per ADR-012, the paid layer is repository-scale and organisational, additive
@@ -79,7 +88,12 @@ knowledge-versus-work line, in three parts:
    hosted runner/VM fabric plus the faithful session-to-test conversion and
    flake-elimination service that make an emitted test *trustworthy*. The product
    sells trust in the artifact and org-scale coverage of intent — not the local act
-   of running a test, which stays consumable for free over the open contract.
+   of running a test, which stays consumable for free over the open contract. The
+   hosting is a **separate brand and offering**, never required for the local path
+   (ADR-035); to keep that option cheap to exercise later, `lore-verify` defines its
+   test runner as a **pluggable interface** from day one (a local runner ships in the
+   open product; a hosted VM-fabric runner is a drop-in backend), so adding hosting is
+   a new backend, not a re-architecture.
 
 The boundary, stated once: **RAC records and reports verification; a separate
 product produces and runs the evidence; the commercial layer aggregates and
@@ -183,6 +197,7 @@ layered additively over the open core, not a closed replacement for it.
 ## Related Roadmaps
 
 - capability-verification-coverage
+- lore-verify-programme
 
 ## Review Date
 
