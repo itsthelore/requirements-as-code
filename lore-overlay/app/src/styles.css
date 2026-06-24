@@ -99,7 +99,10 @@ button.primary {
 }
 .rendered h1,
 .rendered h2,
-.rendered h3 {
+.rendered h3,
+.rendered h4,
+.rendered h5,
+.rendered h6 {
   font-size: 13px;
   font-weight: 700;
   margin: 12px 0 4px;
@@ -121,12 +124,55 @@ button.primary {
 .rendered li {
   margin: 2px 0;
 }
+.rendered li > ul,
+.rendered li > ol {
+  margin: 2px 0;
+}
+.rendered a {
+  color: #2563eb;
+}
+.rendered img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+.rendered hr {
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  margin: 12px 0;
+}
+.rendered blockquote {
+  margin: 0 0 8px;
+  padding: 2px 0 2px 10px;
+  border-left: 3px solid color-mix(in srgb, currentColor 25%, transparent);
+  opacity: 0.85;
+}
+.rendered table {
+  border-collapse: collapse;
+  margin: 0 0 8px;
+}
+.rendered th,
+.rendered td {
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  padding: 3px 8px;
+  text-align: left;
+}
 .rendered code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.9em;
   padding: 1px 4px;
   border-radius: 4px;
   background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.rendered pre {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.rendered pre code {
+  padding: 0;
+  background: none;
 }
 #result {
   margin-top: 12px;

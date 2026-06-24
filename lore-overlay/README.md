@@ -49,6 +49,17 @@ The model call goes through a configurable **OpenAI-compatible** endpoint
 local model. No AI runs in the engine (ADR-002/067); the key lives in the OS
 secret store, not in any serialized config.
 
+### Rendered body (Gate 1)
+
+The review step shows the drafted body as **rendered CommonMark** by default, with
+a one-click **Edit** toggle back to the raw source (the textarea stays the source
+of truth for publish). Rendering uses **markdown-it** (`html: false`) and the
+output is sanitized with **DOMPurify** before it touches `innerHTML` — artifact
+content is untrusted input (ADR-065), so the render path must not become an
+injection vector. These are the app's only frontend dependencies; `npm install`
+pulls them, and the frontend needs a bundler (e.g. Vite) to resolve the
+bare-module imports.
+
 ## What is verified vs not
 
 This MVP was developed in a Linux container, which **cannot build, run, sign, or

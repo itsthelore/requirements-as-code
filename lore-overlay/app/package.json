@@ -8,7 +8,9 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2"
+    "@tauri-apps/api": "^2",
+    "dompurify": "^3",
+    "markdown-it": "^14"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"

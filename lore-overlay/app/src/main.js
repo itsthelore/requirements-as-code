@@ -1,6 +1,16 @@
 // Minimal two-gate capture UI. Authored scaffold — needs a bundler (e.g. Vite)
-// to resolve the @tauri-apps/api import; see ../../README.md.
+// to resolve the bare-module imports; see ../../README.md.
 import { invoke } from "@tauri-apps/api/core";
+import MarkdownIt from "markdown-it";
+import DOMPurify from "dompurify";
+
+// Full CommonMark rendering for the body preview. `html: false` escapes any raw
+// HTML embedded in the artifact rather than passing it through, and the output is
+// run through DOMPurify before it touches innerHTML — artifact content is
+// untrusted input (ADR-065), so the render path must not become an injection
+// vector. `linkify` turns bare URLs into links; markdown-it's own validateLink
+// already blocks javascript:/vbscript:/data: schemes.
+const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
 
 const $ = (id) => document.getElementById(id);
 let current = null; // the proposed { artifact_type, title, body }
@@ -49,63 +59,9 @@ function showEdit() {
 $("tab-preview").addEventListener("click", showPreview);
 $("tab-edit").addEventListener("click", showEdit);
 
-// Minimal, dependency-free markdown → HTML. Artifact content is untrusted
-// (ADR-065), so escape first, then apply a small, safe subset.
+// CommonMark → sanitized HTML for the rendered body view.
 function renderMarkdown(src) {
-  const esc = src.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
-  const inline = (s) =>
-    s
-      .replace(/`([^`]+)`/g, "<code>$1</code>")
-      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/\*([^*]+)\*/g, "<em>$1</em>");
-  let html = "";
-  let list = null;
-  let para = [];
-  const closeList = () => {
-    if (list) {
-      html += `</${list}>`;
-      list = null;
-    }
-  };
-  const flushPara = () => {
-    if (para.length) {
-      html += `<p>${inline(para.join(" "))}</p>`;
-      para = [];
-    }
-  };
-  for (const line of esc.split("\n")) {
-    let m;
-    if (/^\s*$/.test(line)) {
-      flushPara();
-      closeList();
-    } else if ((m = line.match(/^(#{1,6})\s+(.*)$/))) {
-      flushPara();
-      closeList();
-      html += `<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`;
-    } else if ((m = line.match(/^\s*[-*]\s+(.*)$/))) {
-      flushPara();
-      if (list !== "ul") {
-        closeList();
-        html += "<ul>";
-        list = "ul";
-      }
-      html += `<li>${inline(m[1])}</li>`;
-    } else if ((m = line.match(/^\s*\d+\.\s+(.*)$/))) {
-      flushPara();
-      if (list !== "ol") {
-        closeList();
-        html += "<ol>";
-        list = "ol";
-      }
-      html += `<li>${inline(m[1])}</li>`;
-    } else {
-      closeList();
-      para.push(line.trim());
-    }
-  }
-  flushPara();
-  closeList();
-  return html;
+  return DOMPurify.sanitize(md.render(src));
 }
 
 $("publish").addEventListener("click", async () => {
