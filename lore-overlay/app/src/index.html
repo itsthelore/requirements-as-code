@@ -26,7 +26,19 @@
           <strong>independent maintainer</strong> reviews and merges the pull request.
         </p>
         <label>Title <input id="title" type="text" /></label>
-        <label>Body <textarea id="body" rows="10"></textarea></label>
+        <div class="bodyfield">
+          <div class="bodyhead">
+            <span class="lbl">Body</span>
+            <div class="seg" role="tablist" aria-label="Body view">
+              <button id="tab-preview" class="seg-btn" role="tab" aria-selected="true">Preview</button>
+              <button id="tab-edit" class="seg-btn" role="tab" aria-selected="false">Edit</button>
+            </div>
+          </div>
+          <!-- Rendered view (default): the drafted markdown as normal text. -->
+          <div id="body-preview" class="rendered"></div>
+          <!-- Raw view: the editable source of truth. -->
+          <textarea id="body" rows="10" hidden></textarea>
+        </div>
         <div class="row">
           <button id="back">← Edit intent</button>
           <button id="publish" class="primary">Looks right — open draft PR</button>
