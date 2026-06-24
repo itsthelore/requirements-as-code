@@ -128,9 +128,11 @@ tests" coexist.
 
 The only coupling to RAC, deliberately thin and bidirectional:
 
-- **Read:** consume `rac export --graph` / the `lore` MCP read tools to learn the
-  live capabilities and which carry no `verified-by` edge — the worklist of what
-  to verify.
+- **Read:** consume `rac export --graph` to learn the live capabilities and which
+  carry no `verified-by` edge — the worklist of what to verify, surfaced in the
+  `asset_edges` projection (ADR-084). The `lore` MCP read tools (ADR-030/067) do
+  not return this worklist; they serve only artifact-level reads (fetch a
+  capability's text, search), so the worklist comes from `--graph`, not MCP.
 - **Write-back:** after Compile/Run produce a trustworthy test, open a PR adding
   `## Verified By` lines to the relevant capability artifacts. A human reviews and
   merges (ADR-065, ADR-067, ADR-063). `lore-verify` never writes the corpus
@@ -274,8 +276,10 @@ After extraction, `rac-core`'s `rac validate rac/`, `rac relationships rac/
   `rac-capability-verification-evidence` REQ-007; this programme keeps all runtime
   in `verify/`.
 - **Contract drift.** `lore-verify` lags the export contract after extraction.
-  Mitigation: it pins a published major and depends on no internals (ADR-063),
-  the same discipline as the other extracted repos.
+  Mitigation: it pins the `--graph` projection's `schema_version` (ADR-084) and
+  depends on no internals (ADR-063). Note there is no SemVer "major" to pin — RAC
+  uses CalVer (ADR-076) — so `schema_version` is the only correct compatibility
+  axis, and the consumer fails closed / degrades on an unrecognised version.
 - **Brand clash.** The `lore-verify` name is taken. Mitigation: Initiative 1
   confirms availability before any public surface, the Wayfinder lesson.
 - **Prototype lingers, extraction never happens.** Mitigation: Initiative 5 is
