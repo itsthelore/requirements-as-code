@@ -29,22 +29,33 @@ before the driver is built (the roadmap's discipline against silent scope drift)
 ## Decision
 
 Proofkeeper MAY drive and assert over an **HTTP/API modality** as a first-class tool
-surface, alongside the browser and the terminal. This is an in-scope extension of ADR-083,
-not a contradiction of it:
+surface, alongside the browser and the terminal. This ADR **amends ADR-083's tool surface**
+to add HTTP as a third modality. It widens that surface deliberately — it does not claim the
+modality was always implied. The extension is safe because it stays inside ADR-083's mandate:
 
 - It produces **verification evidence and nothing else** (ADR-083's mandate): the agent
   issues an HTTP request and asserts on the response (status, body, headers); it does not
   generate or review product code.
+- It drives the product through its **real external interfaces, as a user or client would** —
+  the same test that admits the browser and the terminal. This is the load-bearing scope
+  boundary: it excludes reaching past those interfaces (reading source, querying the database
+  directly, or calling internal functions), and a future modality is in scope only if it
+  meets this same test.
 - It is the formalization of an ability the terminal modality already grants (`curl`), made
-  deterministic and reviewable as a compiled test step.
+  deterministic and reviewable as a compiled test step. The dedicated tool is not merely
+  ergonomic: it invites HTTP as a primary drive modality, which is the behavioral shift this
+  amendment authorizes.
 - The runtime stays in the sibling product. No model or inference enters the engine
   (ADR-002, ADR-035, ADR-069); the engine still only records the resulting `verified_by`
   links (ADR-084), and the trust boundary remains human pull-request review (ADR-065).
 
-ADR-083's tool phrasing ("a browser and a terminal") is read as illustrative of the
-developer-tool surface, not an exhaustive allowlist; this ADR makes the HTTP modality
-explicit so the extension is recorded rather than assumed. The Non-Goals of ADR-083 are
-unchanged and continue to bind: no code review, no codegen, no general-purpose automation.
+This is recorded as an **amendment**, not a reinterpretation. ADR-083 named its tool surface
+explicitly and paired it with anti-scope-drift discipline, so honesty requires stating that
+this ADR moves that fence — not that the fence was always elsewhere. What keeps the move
+principled is that the boundary shifts from a literal two-tool list to the
+external-interfaces / evidence-only test above, a test the HTTP modality plainly meets. The
+Non-Goals of ADR-083 are unchanged and continue to bind: no code review, no codegen, no
+general-purpose automation.
 
 ## Consequences
 
@@ -60,14 +71,15 @@ unchanged and continue to bind: no code review, no codegen, no general-purpose a
 ### Negative
 
 - A third modality to maintain in the sibling product's recorder, emitter, and tool surface.
-- "What is in scope" now rests on the evidence-only test rather than the literal two-tool
-  phrasing, so future modalities must each be judged against that test.
+- "What is in scope" now rests on the external-interfaces / evidence-only test rather than the
+  literal two-tool phrasing, so future modalities must each be judged against that test.
 
 ### Risks
 
 - A first-class HTTP tool could be stretched toward general API automation beyond
   verification. Mitigation: it is constrained to request-and-assert that yields a committed
-  test, and ADR-083's Non-Goals continue to bind.
+  test, must act through the product's real external interfaces (not internal calls or direct
+  data access), and ADR-083's Non-Goals continue to bind.
 
 ## Status
 
