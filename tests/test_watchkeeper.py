@@ -242,7 +242,7 @@ def test_action_supports_source_installs_for_dogfooding():
     action = _load_yaml("action.yml")
     install = next(s["run"] for s in action["runs"]["steps"] if "pip install" in s.get("run", ""))
     assert "$GITHUB_ACTION_PATH" in install  # source mode
-    assert "requirements-as-code" in install  # pypi mode
+    assert "rac-core" in install  # pypi mode
 
 
 def test_reusable_workflow_passes_inputs_through():

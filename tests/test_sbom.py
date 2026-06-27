@@ -45,7 +45,7 @@ def test_sbom_is_cyclonedx():
 
 def test_sbom_includes_the_package_as_root_component():
     root = _sbom()["metadata"]["component"]
-    assert root["name"] == "requirements-as-code"
+    assert root["name"] == "rac-core"
     assert root["type"] == "library"
 
 
