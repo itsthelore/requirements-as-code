@@ -38,6 +38,11 @@ class EdgeSpec:
     # decision legitimately points at the one it retires.
     forbids_target_status: bool = True
     cardinality: str = "many"  # declared; not yet enforced
+    # External-reference family (ADR-087): the target is an external identifier
+    # (e.g. a Jira key or URL), not an in-corpus artifact. External edges are
+    # exempt from range and referential-integrity resolution and are
+    # format-linted instead; the graph export marks them external and unresolved.
+    external: bool = False
 
 
 def _related(target_type: str) -> EdgeSpec:
@@ -67,6 +72,11 @@ REGISTRY: dict[str, EdgeSpec] = {
             inverse="superseded-by",
             forbids_target_status=False,
         ),
+        # External-reference family (ADR-087): a code-defined edge whose target is
+        # a Jira ticket (key or URL), not an in-corpus artifact. No artifact range;
+        # format-linted, not resolved. Future external systems add sibling edges
+        # here rather than re-litigating the exemption.
+        EdgeSpec(name="related_jira", range=(), external=True),
     )
 }
 
