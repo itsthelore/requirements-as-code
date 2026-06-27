@@ -36,6 +36,14 @@ Generate a pull request description for a RAC change. Use the implementation
 details, roadmap item, ADRs, commits, and code changes provided. Structure
 the PR as a release-contract record, using the format in Output.
 
+Title the pull request in the commit message format from
+`rac-agent-commit-guidelines.md` — `<type>(<area>): <imperative summary>` with an
+optional `[reference]`. The repository squash-merges pull requests, so the title
+becomes the squashed commit's subject line on `main`; a prose title (for example
+"Implement X" or "Add feature Y") breaks the `git log` readability the commit
+standard exists to preserve. Use the dominant change's type and area — usually
+the lead commit's.
+
 Be aggressive about documenting exclusions: prefer stating what RAC does now
 and what RAC deliberately does not do yet. Document accepted implementation
 decisions (naming, schema, JSON contract, validation behavior, exit-code
@@ -128,6 +136,10 @@ This section is the only sanctioned AI disclosure in a pull request.
 
 ## Constraints
 
+- Title the PR in commit-message form (`<type>(<area>): <imperative summary>`,
+  per `rac-agent-commit-guidelines.md`); it becomes the squash-merge commit
+  subject on `main`. Never use a prose title like "Implement X" or "Add
+  feature Y".
 - Do not create generic release notes.
 - Do not summarize only commits.
 - Do not omit intentional exclusions.
