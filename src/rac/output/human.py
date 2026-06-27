@@ -964,7 +964,11 @@ def render_new_human(created: CreatedArtifact) -> str:
 def render_init_human(result: InitResult) -> str:
     """Human `rac init` output: the established identity namespace."""
     verb = "Initialized" if result.created else "Already initialized:"
-    return f"{verb} repository key {result.repository_key}\nConfig: {result.config_path}"
+    lines = [f"{verb} repository key {result.repository_key}", f"Config: {result.config_path}"]
+    if result.profile is not None:
+        lines.append(f"Profile: {result.profile}")
+    lines.extend(f"Wrote: {path}" for path in result.files_written)
+    return "\n".join(lines)
 
 
 def render_quickstart_human(result: QuickstartResult) -> str:
