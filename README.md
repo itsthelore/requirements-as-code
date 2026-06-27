@@ -99,6 +99,10 @@ Requires Python 3.11+. `uv tool install requirements-as-code` also works.
 - **Enforced at write time.** `rac validate` and `rac gate` reject malformed
   artifacts, broken or ambiguous links, and references to superseded decisions —
   in CI, before the knowledge lands.
+- **Air-gapped by design.** The engine makes no LLM calls and no network calls;
+  the only egress is a consent-gated, content-free usage ping that is off by
+  default, and regulated installs can prove it stays off with `rac telemetry off
+  --enterprise` ([security posture](docs/security.md), ADR-086).
 
 ## Connect your agent
 

@@ -944,16 +944,26 @@ version, and an active-repo count; never paths, queries, or repository
 content. Sharing is independent of the local `rac mcp --telemetry` flag.
 
 ```bash
-rac telemetry           # status (default): what is shared, and whether sending is possible
-rac telemetry on        # opt in; mints a random install id
-rac telemetry off       # opt out; nothing else changes
+rac telemetry                          # status (default): what is shared, and whether sending is possible
+rac telemetry on                       # opt in; mints a random install id
+rac telemetry off                      # opt out; nothing else changes
+rac telemetry off --enterprise         # hard-lock the ping off (forces the kill state, refuses 'on')
+rac telemetry off --enterprise --unlock  # remove the enterprise hard-lock
 ```
 
 `status` also reports when the build has no endpoint key configured — in
 that state nothing is sent even with consent. Consent lives at
 `~/.config/rac/telemetry.json`.
 
-- **Exit codes:** `0` consent shown or changed · `2` invalid action
+**Enterprise hard-lock (ADR-086).** For regulated installs that must *prove* the
+ping is off, `rac telemetry off --enterprise` forces the kill state at runtime
+(independent of the build's endpoint key), records a persistent lock, and refuses
+`rac telemetry on` until it is removed with `rac telemetry off --enterprise
+--unlock`. While locked, `status` reports `Sharing: locked (enterprise)`. The lock
+governs the anonymous ping only.
+
+- **Exit codes:** `0` consent shown or changed · `2` invalid action, or `on`
+  refused while enterprise-locked
 
 ---
 
