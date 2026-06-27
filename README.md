@@ -19,10 +19,10 @@
 
 <p align="center">
 <a href="https://github.com/itsthelore/rac-core/actions/workflows/ci.yml"><img src="https://github.com/itsthelore/rac-core/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-<a href="https://pypi.org/project/requirements-as-code/"><img src="https://img.shields.io/pypi/v/requirements-as-code" alt="PyPI"></a>
-<a href="https://pypi.org/project/requirements-as-code/"><img src="https://img.shields.io/pypi/pyversions/requirements-as-code" alt="Python"></a>
+<a href="https://pypi.org/project/rac-core/"><img src="https://img.shields.io/pypi/v/rac-core" alt="PyPI"></a>
+<a href="https://pypi.org/project/rac-core/"><img src="https://img.shields.io/pypi/pyversions/rac-core" alt="Python"></a>
 <a href="https://mypy-lang.org/"><img src="https://img.shields.io/badge/types-Mypy-blue.svg" alt="Typed"></a>
-<a href="https://github.com/itsthelore/rac-core/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/requirements-as-code" alt="License: Apache 2.0"></a>
+<a href="https://github.com/itsthelore/rac-core/blob/main/LICENSE"><img src="https://img.shields.io/pypi/l/rac-core" alt="License: Apache 2.0"></a>
 </p>
 
 > **Give your coding agent the decisions your team already made — so it stops re-doing things you ruled out.**
@@ -49,7 +49,7 @@ recall fuzzily, then verify in Lore.
 1. **Install** the engine:
 
    ```bash
-   pip install requirements-as-code
+   pip install rac-core
    ```
 
 2. **Scaffold** identity and your first artifact:
@@ -74,12 +74,12 @@ recall fuzzily, then verify in Lore.
 
 | Command | Gets you |
 |---|---|
-| `pip install requirements-as-code` | the `rac` CLI + the `lore` MCP server |
-| `pip install 'requirements-as-code[ingest]'` | + DOCX / HTML import |
-| `pip install 'requirements-as-code[ingest-all]'` | + PDF / PPTX / XLSX import |
-| `pip install 'requirements-as-code[explorer]'` | + the terminal Explorer (`rac explorer`) |
+| `pip install rac-core` | the `rac` CLI + the `lore` MCP server |
+| `pip install 'rac-core[ingest]'` | + DOCX / HTML import |
+| `pip install 'rac-core[ingest-all]'` | + PDF / PPTX / XLSX import |
+| `pip install 'rac-core[explorer]'` | + the terminal Explorer (`rac explorer`) |
 
-Requires Python 3.11+. `uv tool install requirements-as-code` also works.
+Requires Python 3.11+. `uv tool install rac-core` also works.
 
 ## How it works
 

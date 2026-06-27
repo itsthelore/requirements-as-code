@@ -21,7 +21,7 @@ run() {
 }
 
 sleep 0.5
-run 'pip install requirements-as-code'
+run 'pip install rac-core'
 run 'claude mcp add lore -- rac mcp'
 run 'rac find "test topology" rac/'
 run 'rac resolve ADR-027 rac/'

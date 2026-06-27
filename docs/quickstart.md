@@ -9,13 +9,13 @@ artifact, and run the three commands you'll use most: `validate`, `inspect`, and
 RAC is a Python package (requires Python 3.11+). Install it with `pip`:
 
 ```bash
-pip install requirements-as-code
+pip install rac-core
 ```
 
 Or with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv tool install requirements-as-code
+uv tool install rac-core
 ```
 
 This puts a single command on your path: `rac`. Check it:

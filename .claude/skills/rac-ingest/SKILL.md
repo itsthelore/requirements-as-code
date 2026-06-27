@@ -36,7 +36,7 @@ rac ingest spec.docx -o rac/requirements/spec.md  # write into the RAC directory
 (pass-through) to Markdown, preserving structure. It does not judge
 whether the result is a valid artifact — that comes next. `-o` never
 overwrites an existing file unless `--force` is passed. Rich formats need
-the optional ingest extras (`pip install 'requirements-as-code[ingest]'`
+the optional ingest extras (`pip install 'rac-core[ingest]'`
 for DOCX/HTML, `[ingest-pdf]`, `[ingest-office]`, or `[ingest-all]`); the
 command names the missing extra when one is needed.
 

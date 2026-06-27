@@ -41,7 +41,7 @@ Spec-driven development (SDD) tools — GitHub Spec Kit, OpenSpec, Kiro — mana
 | Change management | None — RAC does not manage the change cycle; pair it with an SDD tool | Slash-command workflow: specify, clarify, plan, tasks, implement | Slash-command workflow: propose, apply, archive |
 | Traceability | Typed `Related` links between artifacts; `rac relationships --validate` checks them in CI | `/speckit.analyze` runs cross-artifact consistency and coverage analysis | `openspec validate` checks changes and specs for structural issues |
 | Tool coupling | Read-only MCP server; works with any MCP client | Slash commands or skills installed per agent at init (GitHub Copilot, Claude Code, Cursor, and others) | Slash commands for 20+ AI assistants |
-| Install footprint | `pip install requirements-as-code` (Python 3.11+) | `uv tool install specify-cli` from the Git repository (Python 3.11+) | `npm install -g @fission-ai/openspec` (Node.js 20.19+) |
+| Install footprint | `pip install rac-core` (Python 3.11+) | `uv tool install specify-cli` from the Git repository (Python 3.11+) | `npm install -g @fission-ai/openspec` (Node.js 20.19+) |
 
 <!--
 Comparison sources, verified 2026-06-12:

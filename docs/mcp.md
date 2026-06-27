@@ -2,14 +2,14 @@
 
 RAC Guide is an MCP server that serves your repository's requirements,
 decisions, designs, and roadmaps to coding agents as callable tools. It ships
-inside the `requirements-as-code` package — no separate install.
+inside the `rac-core` package — no separate install.
 
 ## 1. Install
 
 ```bash
-pip install requirements-as-code
+pip install rac-core
 # or
-uv tool install requirements-as-code
+uv tool install rac-core
 ```
 
 Requires Python 3.11+. The MCP SDK is a standard dependency; no extra flag is

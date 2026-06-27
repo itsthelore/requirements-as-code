@@ -14,7 +14,7 @@ test it against your Omnigent version before relying on it in production.
 ## Prerequisites
 
 ```bash
-pip install requirements-as-code   # the `rac` CLI and the `lore` MCP server
+pip install rac-core   # the `rac` CLI and the `lore` MCP server
 ```
 
 A repository with a RAC corpus under `rac/` (run `rac quickstart`, or use this
