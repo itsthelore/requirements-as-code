@@ -18,9 +18,17 @@ a hosted service or a third-party certification (see [Scope](#scope-and-non-goal
   invariant ([ADR-002](https://github.com/itsthelore/rac-core/blob/main/rac/decisions/adr-002-ai-optional.md)):
   RAC is deterministic and AI-optional, so the core never depends on a remote
   call.
-- **No telemetry.** RAC collects no usage analytics in its default operation. The
-  optional MCP server and any AI-assisted authoring are explicitly opt-in and
-  bring-your-own-credentials ([ADR-035](https://github.com/itsthelore/rac-core/blob/main/rac/decisions/adr-035-byo-ai-credentials.md));
+- **No telemetry by default; provably off for regulated installs.** RAC collects
+  no usage analytics in its default operation. The one optional exception is a
+  consent-gated, content-free anonymous daily ping from the MCP server — a random
+  install id, the version, and an active-repo count, never paths, queries, or
+  content ([ADR-041](https://github.com/itsthelore/rac-core/blob/main/rac/decisions/adr-041-anonymous-usage-ping.md)) —
+  which stays off unless you opt in. A regulated install can prove it stays off at
+  runtime with `rac telemetry off --enterprise`: a tamper-evident hard-lock that
+  forces the ping off and refuses re-enabling until explicitly unlocked
+  ([ADR-086](https://github.com/itsthelore/rac-core/blob/main/rac/decisions/adr-086-air-gap-and-enterprise-telemetry-lock.md)).
+  AI-assisted authoring is opt-in and bring-your-own-credentials
+  ([ADR-035](https://github.com/itsthelore/rac-core/blob/main/rac/decisions/adr-035-byo-ai-credentials.md));
   nothing phones home on your behalf.
 - **Deterministic, local-only data flow.** The same corpus state yields
   byte-identical JSON and SARIF output, with no timestamps and stable ordering
@@ -101,3 +109,5 @@ offline posture is out of scope for the project (v0.21.14 Non-Goals).
 - [Validation](validation.md) — the write-time gate and SARIF output.
 - [ADR-002](https://github.com/itsthelore/rac-core/blob/main/rac/decisions/adr-002-ai-optional.md) — deterministic, AI-optional core.
 - [ADR-035](https://github.com/itsthelore/rac-core/blob/main/rac/decisions/adr-035-byo-ai-credentials.md) — bring-your-own AI credentials.
+- [ADR-041](https://github.com/itsthelore/rac-core/blob/main/rac/decisions/adr-041-anonymous-usage-ping.md) — the consent-gated, content-free anonymous ping.
+- [ADR-086](https://github.com/itsthelore/rac-core/blob/main/rac/decisions/adr-086-air-gap-and-enterprise-telemetry-lock.md) — air-gap posture and the enterprise telemetry hard-lock.
