@@ -194,7 +194,7 @@ rac ingest report.pdf -o report.md --force
 ```
 
 Conversion uses optional extras. Install the readers you need:
-`pip install 'requirements-as-code[ingest]'` (DOCX/HTML), `[ingest-pdf]`,
+`pip install 'rac-core[ingest]'` (DOCX/HTML), `[ingest-pdf]`,
 `[ingest-office]` (PPTX/XLSX), or `[ingest-all]`.
 
 ---
@@ -862,7 +862,7 @@ it shows is also available through `rac portfolio`, `rac index`, `rac resolve`,
 The TUI dependency ships as an optional extra, so the core install stays light:
 
 ```bash
-pip install 'requirements-as-code[explorer]'
+pip install 'rac-core[explorer]'
 rac explorer rac/
 ```
 

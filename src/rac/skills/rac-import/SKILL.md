@@ -50,7 +50,7 @@ rac ingest decision.docx          # preview Markdown on stdout
 `rac ingest <file>` converts DOCX / PDF / HTML / PPTX / XLSX / Markdown to
 Markdown text, preserving structure — it does not judge whether the result is a
 valid artifact. Pasted Markdown needs no conversion. Rich formats need the
-optional extras (`pip install 'requirements-as-code[ingest]'`, `[ingest-pdf]`,
+optional extras (`pip install 'rac-core[ingest]'`, `[ingest-pdf]`,
 `[ingest-office]`); the command names the missing extra when one is needed.
 
 ## 3. Choose the type and read its real schema

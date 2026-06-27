@@ -15,7 +15,7 @@ import './landing.css';
 const REPO_URL = 'https://github.com/itsthelore/rac-core';
 
 const DEMO_ALT =
-  'Recorded terminal session: pip install requirements-as-code, ' +
+  'Recorded terminal session: pip install rac-core, ' +
   'claude mcp add lore -- rac mcp, then rac find, rac resolve and ' +
   "rac validate run against this repository's corpus, ending in PASS";
 
@@ -223,7 +223,7 @@ export function LandingApp() {
                 <div className="get__steps">
                   <p className="get__step">
                     <span className="get__lead">Install:</span>{' '}
-                    <CopyCommand command="pip install requirements-as-code" />
+                    <CopyCommand command="pip install rac-core" />
                   </p>
                   <p className="get__step">
                     <span className="get__lead">
