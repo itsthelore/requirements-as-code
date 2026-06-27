@@ -34,6 +34,28 @@ _THEN_RE = re.compile(r"\bthen\b", re.IGNORECASE)
 _HORIZON_VALUES = ("now", "next", "later")
 _QUARTER_RE = re.compile(r"^Q[1-4]\s+\d{4}$")
 
+# External-reference format-lint (ADR-087). A relationship section the registry
+# marks external (## Related Jira) carries external identifiers, not artifact
+# references; each entry must be a well-formed key or URL. Pure and offline — the
+# engine never contacts the external system; ticket existence/state checks are the
+# lore-atlassian satellite's job (ADR-090). New external kinds register a
+# validator here, keyed by the snake_case edge name.
+MALFORMED_EXTERNAL_REFERENCE = "malformed-external-reference"
+_JIRA_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$")
+_URL_RE = re.compile(r"^https?://\S+$")
+_EXTERNAL_LIST_MARKER_RE = re.compile(r"^(?:[-*+]|\d+\.)\s+")
+
+
+def _is_valid_jira_ref(ref: str) -> bool:
+    """A Jira key (``PROJ-1234``) or an http(s) URL — format only, no lookup."""
+    return bool(_JIRA_KEY_RE.match(ref) or _URL_RE.match(ref))
+
+
+# Per external edge kind: (entry validator, human label for the diagnostic).
+_EXTERNAL_REF_RULES: dict[str, tuple[Callable[[str], bool], str]] = {
+    "related_jira": (_is_valid_jira_ref, "Jira key (e.g. PROJ-1234) or URL"),
+}
+
 
 def has_errors(issues: list[Issue]) -> bool:
     """True if any issue is error-severity."""
@@ -50,6 +72,7 @@ def validate(product: Product) -> list[Issue]:
     must be routed explicitly above it.
     """
     issues = _validate_metadata(product)
+    issues += _validate_external_references(product)
     artifact_type = classify(product).type
     if artifact_type == "decision":
         return issues + _validate_decision(product)
@@ -182,6 +205,37 @@ def _validate_metadata(product: Product) -> list[Issue]:
                 "choose one",
             )
         )
+    return issues
+
+
+def _validate_external_references(product: Product) -> list[Issue]:
+    """Format-lint external-reference relationship sections (ADR-087).
+
+    For any relationship section the registry marks external (``## Related
+    Jira``), each entry must be a well-formed external identifier. A pure, offline
+    syntax check — the engine never contacts the external system; existence and
+    state checks live in the lore-atlassian satellite (ADR-090). Runs for every
+    artifact type and is overridable per ADR-053 like any validation rule.
+    """
+    spec = spec_for(classify(product).type)
+    if spec is None:
+        return []
+    issues: list[Issue] = []
+    for section in spec.optional:
+        rule = _EXTERNAL_REF_RULES.get(section.replace(" ", "_"))
+        if rule is None:
+            continue
+        is_valid, label = rule
+        for line in product.sections.get(section, "").splitlines():
+            entry = _EXTERNAL_LIST_MARKER_RE.sub("", line.strip(), count=1).strip()
+            if entry and not is_valid(entry):
+                issues.append(
+                    Issue(
+                        "error",
+                        MALFORMED_EXTERNAL_REFERENCE,
+                        f"## {section.title()} entry {entry!r} is not a valid {label}.",
+                    )
+                )
     return issues
 
 
