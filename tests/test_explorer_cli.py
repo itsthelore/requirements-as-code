@@ -89,7 +89,7 @@ def test_missing_extra_exits_2_with_install_hint(tmp_path, monkeypatch, capsys):
         main(["explorer", str(tmp_path)])
     assert excinfo.value.code == 2
     err = capsys.readouterr().err
-    assert "pip install 'requirements-as-code[explorer]'" in err
+    assert "pip install 'rac-core[explorer]'" in err
 
 
 def test_unavailable_error_carries_the_hint(monkeypatch):
@@ -99,7 +99,7 @@ def test_unavailable_error_carries_the_hint(monkeypatch):
     monkeypatch.setattr(launch, "_import_app", import_fails)
     with pytest.raises(ExplorerUnavailable, match="explorer extra"):
         run_explorer(".")
-    assert "requirements-as-code[explorer]" in MISSING_EXTRA_HINT
+    assert "rac-core[explorer]" in MISSING_EXTRA_HINT
 
 
 def test_other_import_errors_are_real_bugs(monkeypatch):
