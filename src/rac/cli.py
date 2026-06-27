@@ -135,6 +135,7 @@ from rac.services.index import build_repository_index
 from rac.services.ingest import ConversionError, UnsupportedDocument, ingest
 from rac.services.init import (
     DEFAULT_KEY,
+    InvalidProfile,
     InvalidRepositoryKey,
     InvalidTicketingProvider,
     MalformedRepositoryConfig,
@@ -144,6 +145,7 @@ from rac.services.init import (
 from rac.services.inspect import build_inspection, inspect_directory
 from rac.services.migrate import migrate_metadata
 from rac.services.portfolio import build_portfolio_summary
+from rac.services.profiles import PROFILE_NAMES
 from rac.services.quickstart import DEFAULT_TYPE, CorpusNotEmpty, quickstart
 from rac.services.recency import artifact_recency
 from rac.services.relationships import (
@@ -1009,8 +1011,10 @@ def cmd_init(args: argparse.Namespace) -> int:
         print(f"rac: not a directory: {args.directory}", file=sys.stderr)
         raise SystemExit(EXIT_USAGE)
     try:
-        result = init_repository(args.directory, key=args.key, ticketing=args.ticketing)
-    except (InvalidRepositoryKey, InvalidTicketingProvider) as exc:
+        result = init_repository(
+            args.directory, key=args.key, ticketing=args.ticketing, profile=args.profile
+        )
+    except (InvalidRepositoryKey, InvalidTicketingProvider, InvalidProfile) as exc:
         print(f"rac: {exc}", file=sys.stderr)
         raise SystemExit(EXIT_USAGE) from None
     except (RepositoryKeyConflict, MalformedRepositoryConfig) as exc:
@@ -1919,6 +1923,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="External ticketing provider for ## Related Tickets references "
         f"(one of: {', '.join(TICKETING_PROVIDER_NAMES)}). Writes ticketing.provider "
         "to .rac/config.yaml; omit to leave it unset (ADR-087).",
+    )
+    p_init.add_argument(
+        "--profile",
+        choices=PROFILE_NAMES,
+        default=None,
+        metavar="NAME",
+        help="Apply a built-in config profile on a fresh init "
+        f"(one of: {', '.join(PROFILE_NAMES)}). Writes .mcp.json client wiring and "
+        "(enterprise) an enforcement-policy stanza — configuration only, never "
+        "prose; never overwrites an existing file (ADR-088).",
     )
     p_init.add_argument(
         "--json", action="store_true", help="Emit JSON instead of human-readable text."
