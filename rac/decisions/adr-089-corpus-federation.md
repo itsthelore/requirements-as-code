@@ -28,11 +28,14 @@ once.
 
 ## Decision
 
-Federation is **accepted in principle but deferred in mechanism, and
-design-partner-gated**. The engine will gain a parent-corpus resolver under a
-future design and its own implementing ADR, written when a design partner commits
-to it — not speculatively. This decision records the bar that any such design must
-clear.
+Federation is **accepted in principle but deferred in mechanism and sequenced
+last** among the enterprise items. A design partner is available, so the work is
+unblocked; it is nonetheless scheduled after the lower-risk, additive enterprise
+decisions (ADR-084, ADR-086 through ADR-088, ADR-090, ADR-091), so the engine's
+deepest change is taken on deliberately rather than first. The engine will gain a
+parent-corpus resolver under a future design and its own implementing ADR, built
+with the design partner against a real shared-standards corpus. This decision
+records the bar that any such design must clear.
 
 Non-negotiable constraints on any future federation design:
 
@@ -61,8 +64,8 @@ profile scaffold (ADR-088) emits no parent declaration.
 
 - The bar is recorded now, so the eventual design cannot quietly become an
   enterprise-only fork or a network dependency.
-- Firms get a credible answer ("yes, under these constraints, when we build it
-  with you") without the project paying for a speculative, partner-less design.
+- Firms get a credible answer ("yes, under these constraints, built with our
+  design partner") while the cheaper, additive enterprise wins land first.
 
 ### Negative
 
@@ -78,14 +81,16 @@ profile scaffold (ADR-088) emits no parent declaration.
 
 ## Alternatives Considered
 
-### Build federation now, speculatively
+### Build federation first, ahead of the additive items
 
-Design and ship the resolver ahead of a design partner.
+Take on the resolver before the lower-risk enterprise decisions.
 
 #### Disadvantages
 
-- The deepest change on the roadmap, built without a real corpus to test the
-  override and provenance semantics against; high risk of rework.
+- Front-loads the deepest, highest-risk change and delays the cheaper enterprise
+  value (audit, air-gap, Jira, profile, observability). Even with a partner,
+  sequencing it first maximises risk exposure before the additive wins are
+  banked.
 
 ### Enterprise-only federation
 
@@ -105,8 +110,8 @@ Keep every corpus single-tree forever.
 - Leaves a real, repeated enterprise need (firm-wide standards) permanently
   unmet.
 
-Accept in principle, defer the mechanism, bind the constraints, gate on a design
-partner.
+Accept in principle, defer the mechanism, bind the constraints, and sequence it
+last — built with the design partner once the additive items have landed.
 
 ## Relationship to Other Decisions
 
