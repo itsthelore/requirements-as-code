@@ -1,4 +1,4 @@
-<!-- BEGIN RAC MANAGED BLOCK (digest: f8b25cc611194eab109e45eeca2b709dc9ec6473334e1dce76eab30963b6ed24) -->
+<!-- BEGIN RAC MANAGED BLOCK (digest: 7ff46bfd5bc5da127399bcf1416d9b1cdaf42a3414212529fb231ae01d8700ea) -->
 <!-- Managed by `rac export --agent-rules`. Edit decisions in rac/, not here; content outside this block is preserved. -->
 ## Settled decisions (RAC)
 
@@ -59,5 +59,6 @@ These decisions are already accepted. Do not re-open or contradict them; ask the
 - **RAC-KVNM01QPBPXB** — ADR-075: The Pre-Merge Check Tier Is a Required Merge Gate on `main` _(Process)_
 - **RAC-KVPTVX3YZ87K** — ADR-076: Adopt CalVer (`YYYY.MM.N`) for RAC Releases _(Process)_
 - **RAC-KVTS86ZGVJV7** — ADR-077: The Two-Gate Capture Write Model _(Architecture)_
+- **RAC-KW2YW6XK593X** — ADR-084: Read-Access Audit Recorder _(Product)_
 - **RAC-KW47GFBHK31W** — ADR-086: Air-Gap Posture and Enterprise Telemetry Hard-Lock _(Product)_
 <!-- END RAC MANAGED BLOCK -->
