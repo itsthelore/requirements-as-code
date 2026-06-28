@@ -1,5 +1,12 @@
 repository_key: RAC
 
+# External ticketing provider (ADR-087, ADR-093). Roadmap intent lives in the
+# corpus; execution is tracked in GitHub issues, linked from a live artifact's
+# `## Related Tickets` section. `rac validate` format-lints those references as
+# `owner/repo#123` or a URL — offline; the engine never fetches issue state.
+ticketing:
+  provider: github
+
 # Warnings-first onboarding (ADR-053), dogfooded: RAC's own corpus predates the
 # v0.17.1 requirement-quality checks (29148 / EARS / BCP-14, ADR-056), so they are
 # disabled here pending incremental cleanup. The checks ship at full strength for
