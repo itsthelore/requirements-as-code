@@ -88,7 +88,7 @@ and why"; GitHub answers "what's being worked, by whom, in what order, now."
 
 ## Status
 
-Proposed
+Accepted
 
 ## Category
 
