@@ -13,7 +13,7 @@ type: decision
 > suites alike — Atlassian is a subdir, not its own repo. The decision below —
 > connectors are export-contract consumers, consolidated, never one repo per
 > provider — is unchanged; it is the pattern ADR-092 generalises across the
-> `rac-*` family. Execution is planned in the `v0.31.x-repo-topology` series.
+> `rac-*` family. Execution is planned in the `repo-topology` series.
 
 The export-to-RAG work (the umbrella roadmap `corpus-export-to-rag-backends`, the
 interplay design `lore-supermemory-interplay`, and the wire-shape design
