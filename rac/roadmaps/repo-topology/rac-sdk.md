@@ -4,7 +4,7 @@ id: RAC-KW6F49KET6TB
 type: roadmap
 tags: [structure, org, sdk, distribution]
 ---
-# RAC v0.31.3 — Consolidate Language SDKs into rac-sdk
+# Consolidate Language SDKs into rac-sdk
 
 ## Status
 
@@ -73,6 +73,6 @@ stable `--json` surface (ADR-063).
 
 ## Related Roadmaps
 
-- v0.31.0-repo-topology-convergence
+- repo-topology-convergence
 - v0.22.5-extract-typescript-stack
 - v0.20.1-python-sdk-docs

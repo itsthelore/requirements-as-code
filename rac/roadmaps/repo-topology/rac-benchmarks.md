@@ -4,7 +4,7 @@ id: RAC-KW6F4BCY46EQ
 type: roadmap
 tags: [structure, org, benchmark, distribution]
 ---
-# RAC v0.31.4 — Restructure decisiongrounding into rac-benchmarks
+# Restructure decisiongrounding into rac-benchmarks
 
 ## Status
 
@@ -69,5 +69,5 @@ repos.
 
 ## Related Roadmaps
 
-- v0.31.0-repo-topology-convergence
+- repo-topology-convergence
 - v0.22.4-extract-decisiongrounding

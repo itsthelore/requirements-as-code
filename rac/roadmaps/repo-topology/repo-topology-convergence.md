@@ -4,7 +4,7 @@ id: RAC-KW6F43XVSPCX
 type: roadmap
 tags: [structure, org, distribution, branding]
 ---
-# RAC v0.31.0 — Repository Topology Convergence
+# Repository Topology Convergence
 
 ## Status
 
@@ -48,15 +48,15 @@ package, CLI, or server-identity change (ADR-029/036/039 hold).
 
 Each initiative is its own item in this series, executed independently:
 
-- **`rac-ci`** (v0.31.1) — consolidate `rac-actions`, `lore-watchkeeper`, and
+- **`rac-ci`** — consolidate `rac-actions`, `lore-watchkeeper`, and
   `lore-gatekeeper` into one CI-delivery repo, subdir per capability.
-- **`rac-connectors`** (v0.31.2) — rename `lore-connectors`; subdir per
+- **`rac-connectors`** — rename `lore-connectors`; subdir per
   integration, inbound and outbound.
-- **`rac-sdk`** (v0.31.3) — consolidate `rac-sdk-ts` into `rac-sdk/ts/`; the
+- **`rac-sdk`** — consolidate `rac-sdk-ts` into `rac-sdk/ts/`; the
   Python SDK stays in `rac-core` (ADR-062).
-- **`rac-benchmarks`** (v0.31.4) — restructure `decisiongrounding` into
+- **`rac-benchmarks`** — restructure `decisiongrounding` into
   `rac-benchmarks/decisiongrounding/`.
-- **`rac-editors`** (v0.31.5) — rename `lore-vscode` into `rac-editors/vscode/`.
+- **`rac-editors`** — rename `lore-vscode` into `rac-editors/vscode/`.
 - **Naming/brand cutover** — apply the `rac-*` slug rule across the
   constellation as each repo lands; the "Lore" brand stays at the org and the
   marketplace listings (ADR-092).
@@ -102,11 +102,11 @@ Each initiative is its own item in this series, executed independently:
 
 ## Related Roadmaps
 
-- v0.31.1-rac-ci
-- v0.31.2-rac-connectors
-- v0.31.3-rac-sdk
-- v0.31.4-rac-benchmarks
-- v0.31.5-rac-editors
+- rac-ci
+- rac-connectors
+- rac-sdk
+- rac-benchmarks
+- rac-editors
 - repo-extraction-programme
 
 ## Related Requirements

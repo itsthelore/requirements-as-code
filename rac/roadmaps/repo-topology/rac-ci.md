@@ -4,7 +4,7 @@ id: RAC-KW6F45V3NGFF
 type: roadmap
 tags: [structure, org, ci, distribution]
 ---
-# RAC v0.31.1 — Consolidate CI Delivery into rac-ci
+# Consolidate CI Delivery into rac-ci
 
 ## Status
 
@@ -87,6 +87,6 @@ GitHub→other-platform work is in the thin wrappers, not the engine.
 
 ## Related Roadmaps
 
-- v0.31.0-repo-topology-convergence
+- repo-topology-convergence
 - v0.22.6-split-actions
 - repo-extraction-programme

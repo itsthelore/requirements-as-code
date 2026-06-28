@@ -22,7 +22,7 @@ Architecture
 > member* model under uniform `rac-*` naming — `rac-ci` (CI delivery),
 > `rac-connectors`, `rac-sdk`, `rac-benchmarks`, `rac-editors`. ADR-092 governs
 > where the two differ; this ADR remains the record of the first topology.
-> Execution is re-planned in the `v0.31.x-repo-topology` series.
+> Execution is re-planned in the `repo-topology` series.
 
 `requirements-as-code` has moved from a personal GitHub account
 (`tcballard`) into the `itsthelore` organisation. The repository is a

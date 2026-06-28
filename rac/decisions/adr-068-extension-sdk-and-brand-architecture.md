@@ -23,7 +23,7 @@ Architecture
 > and the marketplace listings, not in repository slugs. ADR-068's
 > non-topology decisions still hold: the single shared-VSIX client surface, and
 > the Python SDK staying inside `rac-core` (ADR-062). ADR-092 governs where the
-> two differ; execution is re-planned in the `v0.31.x-repo-topology` series.
+> two differ; execution is re-planned in the `repo-topology` series.
 
 ADR-064 settled the first repository topology for the `itsthelore`
 organisation: extract `decisiongrounding` and the GitHub Actions, keep the

@@ -4,7 +4,7 @@ id: RAC-KW6F47QRN0ND
 type: roadmap
 tags: [structure, org, distribution]
 ---
-# RAC v0.31.2 — Rename lore-connectors to rac-connectors
+# Rename lore-connectors to rac-connectors
 
 ## Status
 
@@ -73,5 +73,5 @@ item applies the `rac-*` name and the wider remit.
 
 ## Related Roadmaps
 
-- v0.31.0-repo-topology-convergence
+- repo-topology-convergence
 - corpus-export-to-rag-backends

@@ -4,7 +4,7 @@ id: RAC-KW6F4D6J27WS
 type: roadmap
 tags: [structure, org, editor, distribution]
 ---
-# RAC v0.31.5 — Rename lore-vscode into rac-editors
+# Rename lore-vscode into rac-editors
 
 ## Status
 
@@ -68,5 +68,5 @@ lives at the marketplace listing, not the repository name (ADR-092).
 
 ## Related Roadmaps
 
-- v0.31.0-repo-topology-convergence
+- repo-topology-convergence
 - v0.22.5-extract-typescript-stack

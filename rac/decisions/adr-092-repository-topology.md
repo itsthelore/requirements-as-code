@@ -219,7 +219,7 @@ Flip ADR-068 to Superseded in this change.
 
 ## Related Roadmaps
 
-- v0.31.0-repo-topology-convergence
+- repo-topology-convergence
 
 ## Review Date
 
