@@ -154,4 +154,4 @@ semantic judgement of meaning.
 
 ## Related Roadmaps
 
-- v0.29.0-relevance-ranking
+- relevance-ranking

@@ -3,7 +3,7 @@ schema_version: 1
 id: RAC-KVSQ27BCJ0TC
 type: roadmap
 ---
-# RAC v0.29.0 — Deterministic Relevance Ranking
+# Deterministic Relevance Ranking
 
 ## Status
 

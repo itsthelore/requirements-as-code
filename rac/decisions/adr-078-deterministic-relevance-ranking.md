@@ -115,4 +115,4 @@ Technical
 
 ## Related Roadmaps
 
-- v0.29.0-relevance-ranking
+- relevance-ranking

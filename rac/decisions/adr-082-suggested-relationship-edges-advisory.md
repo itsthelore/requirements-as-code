@@ -113,4 +113,4 @@ Architecture
 
 ## Related Roadmaps
 
-- v0.28.0-link-suggestions
+- link-suggestions

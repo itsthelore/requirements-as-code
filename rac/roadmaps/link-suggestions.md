@@ -3,7 +3,7 @@ schema_version: 1
 id: RAC-KVSNP3C2T4WA
 type: roadmap
 ---
-# RAC v0.28.0 — Relationship Link Suggestions
+# Relationship Link Suggestions
 
 ## Status
 

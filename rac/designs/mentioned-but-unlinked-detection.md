@@ -174,4 +174,4 @@ review*, never as an assertion that an edge exists.
 
 ## Related Roadmaps
 
-- v0.28.0-link-suggestions
+- link-suggestions
