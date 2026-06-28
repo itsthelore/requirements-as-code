@@ -1,4 +1,4 @@
-<!-- BEGIN RAC MANAGED BLOCK (digest: 12912e7c05a94cab68210e645ee9deb3b36ce05783910746d22d15c580db0fe6) -->
+<!-- BEGIN RAC MANAGED BLOCK (digest: 6d6744e61bad8dfd623d6fff733ed9f339145b8b8d75e50cbd071eac8727bd3c) -->
 <!-- Managed by `rac export --agent-rules`. Edit decisions in rac/, not here; content outside this block is preserved. -->
 ## Settled decisions (RAC)
 
@@ -65,4 +65,5 @@ These decisions are already accepted. Do not re-open or contradict them; ask the
 - **RAC-KW47GJ749PKC** — ADR-088: Enterprise Profile Scaffold (`rac init --profile`) _(Product)_
 - **RAC-KW47GN4SB403** — ADR-090: Enterprise Integration Surfaces and Boundaries _(Architecture)_
 - **RAC-KW5A03ZHXN9F** — ADR-092: Repository Topology — One Repo Per Concern, rac-* Naming _(Architecture)_
+- **RAC-KW6HY8W1CBK6** — ADR-093: Roadmap Intent Lives in the Corpus; Execution Is Tracked in GitHub Issues _(Process)_
 <!-- END RAC MANAGED BLOCK -->
