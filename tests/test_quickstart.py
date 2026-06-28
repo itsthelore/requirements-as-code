@@ -10,6 +10,7 @@ valid, classifiable artifact like any `rac new` output.
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -253,3 +254,42 @@ def test_quickstart_json_never_prompts(tmp_path, _consent_home, monkeypatch, cap
     assert main(["quickstart", str(tmp_path / "repo"), "--json"]) == 0
     json.loads(capsys.readouterr().out)  # machine output stays pure JSON
     assert consent.consent_recorded() is False
+
+
+# --- cold-start contract (rac-growth-adoption REQ-001/002) -------------------
+
+
+def test_cold_start_one_command_zero_config(tmp_path, monkeypatch):
+    # The canonical cold start (REQ-002): from a clean directory with no
+    # .rac/config.yaml and no RAC_* environment, `rac quickstart` then
+    # `rac validate` reaches a passing first artifact — zero configuration, one
+    # command before the check.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    for var in [k for k in os.environ if k.startswith("RAC_")]:
+        monkeypatch.delenv(var, raising=False)
+
+    assert not (tmp_path / ".rac" / "config.yaml").exists()  # nothing pre-configured
+    assert main(["quickstart"]) == 0
+    artifact = tmp_path / "rac" / "requirements" / "first-requirement.md"
+    assert artifact.is_file()
+    assert main(["validate", str(artifact)]) == 0  # first artifact validates, exit 0
+    # Zero config: the only state written is the identity file and the one
+    # starter artifact — no account, env var, or extra config was required.
+    assert (tmp_path / ".rac" / "config.yaml").is_file()
+
+
+def test_cold_start_three_command_path(tmp_path, monkeypatch):
+    # REQ-002 also names the explicit path: init -> new -> (edit) -> validate.
+    # `rac new` does not create parent directories by design (create.py), so the
+    # family directory is made first — the one snag that `rac quickstart` removes.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    monkeypatch.setattr("sys.stdout.isatty", lambda: False)
+    assert main(["init"]) == 0
+    (tmp_path / "rac" / "requirements").mkdir(parents=True)
+    assert main(["new", "requirement", "rac/requirements/login-flow.md"]) == 0
+    # The scaffold is structurally valid as written (the TODO placeholders are
+    # content, not structure); editing is for meaning, not to pass validate.
+    assert main(["validate", "rac/requirements/login-flow.md"]) == 0
