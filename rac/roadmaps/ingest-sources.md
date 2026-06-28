@@ -3,7 +3,7 @@ schema_version: 1
 id: RAC-KVSQ2CV0AM13
 type: roadmap
 ---
-# RAC v0.30.0 — Note-Tool Ingest Sources
+# Note-Tool Ingest Sources
 
 ## Status
 

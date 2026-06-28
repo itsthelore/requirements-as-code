@@ -72,7 +72,7 @@ consume the graph: both see a sparser graph than the text supports.
 
 ## Related Roadmaps
 
-- v0.28.0-link-suggestions
+- link-suggestions
 
 ## Related Requirements
 
