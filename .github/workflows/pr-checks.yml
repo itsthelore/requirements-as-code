@@ -69,9 +69,10 @@ jobs:
           tests/test_operations.py
           tests/test_golden.py tests/test_dogfood.py
 
-  # Watchkeeper dogfood (v0.12.3): every pull request here gets a product
-  # knowledge review from the local action in source mode — which is also
-  # the live end-to-end test of action.yml itself.
+  # Watchkeeper dogfood: every pull request gets a product-knowledge review by
+  # running the CLI directly from a source install. The composite action wrapper
+  # now lives in rac-ci (itsthelore/rac-ci/watchkeeper/github); rac-core dogfoods
+  # the engine itself rather than its own published wrapper.
   watchkeeper:
     name: watchkeeper (dogfood, source install)
     runs-on: ubuntu-latest
@@ -80,16 +81,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./
+      - uses: actions/setup-python@v6
         with:
-          path: rac
-          install-from: source
+          python-version: "3.11"
 
-  # Validate dogfood (v0.17.2): every pull request runs the local validate
-  # action in source mode — the live end-to-end test of validate-action/action.yml
-  # (install, `rac validate --sarif`, exit-code propagation). SARIF uploads to
-  # Code Scanning for same-repo PRs; it is skipped on forks, whose token cannot be
-  # granted security-events: write, so the check never fails on a missing scope.
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Run watchkeeper
+        env:
+          PR_BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --quiet --no-tags origin \
+            "+refs/heads/$PR_BASE_REF:refs/remotes/origin/$PR_BASE_REF" || true
+          rac watchkeeper rac --base "origin/$PR_BASE_REF" --format github \
+            --fail-on error > "$GITHUB_STEP_SUMMARY"
+
+  # Validate dogfood (Registrar): run `rac validate --sarif` from a source install
+  # and upload to Code Scanning (skipped on forks, whose token cannot be granted
+  # security-events: write). The wrapper action now lives in
+  # itsthelore/rac-ci/registrar/github; this dogfoods the engine directly.
   validate:
     name: validate (dogfood, source install)
     runs-on: ubuntu-latest
@@ -101,11 +114,36 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./validate-action
+      - uses: actions/setup-python@v6
         with:
-          path: rac
-          install-from: source
-          upload-sarif: ${{ !github.event.pull_request.head.repo.fork }}
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Run rac validate (SARIF)
+        id: validate
+        run: |
+          set +e
+          rac validate rac --sarif > rac.sarif
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Upload SARIF
+        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: rac.sarif
+
+      - name: Re-surface exit code
+        env:
+          EXIT_CODE: ${{ steps.validate.outputs.exit_code }}
+        run: |
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "::error::rac validate exited $EXIT_CODE — see Code Scanning annotations."
+            exit "$EXIT_CODE"
+          fi
 
   # Agent-rules drift gate (v0.21.16, ADR-067): every pull request re-derives the
   # live-decision digest from the corpus and fails if any committed agent-context
@@ -184,14 +222,12 @@ jobs:
       - name: Run the doctor health diagnostic
         run: rac doctor rac/
 
-  # PR-gate dogfood (v0.21.14): every pull request runs the local PR-gate action
-  # in source mode — the live end-to-end test of pr-gate-action/action.yml. It
-  # carries the full contract via a single `rac gate` command — validation,
-  # relationships, and review under the corpus enforcement policy — into one
-  # required check, uploading one SARIF document under the Code Scanning category
-  # `rac-gate` (distinct from the standalone validate job above, so the analyses
-  # never collide). Skipped on forks, whose token cannot be granted
-  # security-events: write.
+  # PR-gate dogfood: run the full contract as a single `rac gate --sarif` from a
+  # source install — validation, relationships, and review under the corpus
+  # enforcement policy — uploading one SARIF under the Code Scanning category
+  # `rac-gate` (distinct from the standalone validate job, so the analyses never
+  # collide). The wrapper action now lives in itsthelore/rac-ci/gatekeeper/github.
+  # Skipped on forks, whose token cannot be granted security-events: write.
   gate:
     name: pr-gate (dogfood, source install)
     runs-on: ubuntu-latest
@@ -203,9 +239,36 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./pr-gate-action
+      - uses: actions/setup-python@v6
         with:
-          path: rac
-          install-from: source
-          upload-sarif: ${{ !github.event.pull_request.head.repo.fork }}
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Run rac gate (SARIF)
+        id: gate
+        run: |
+          set +e
+          mkdir -p rac-sarif
+          rac gate rac --sarif > rac-sarif/gate.sarif
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Upload gate SARIF
+        if: ${{ always() && !github.event.pull_request.head.repo.fork }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: rac-sarif/gate.sarif
+          category: rac-gate
+
+      - name: Re-surface exit code
+        env:
+          EXIT_CODE: ${{ steps.gate.outputs.exit_code }}
+        run: |
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "::error::RAC PR gate failed (exit $EXIT_CODE) — see Code Scanning annotations."
+            exit "$EXIT_CODE"
+          fi
 

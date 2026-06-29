@@ -136,13 +136,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: itsthelore/rac-core/validate-action@v0
+      - uses: itsthelore/rac-ci/registrar/github@v1
         with:
           path: rac/
 ```
 
 Inputs: `path` (default `rac`), `upload-sarif` (default `true`), `sarif-file`,
-`rac-version` (pin a release), and `install-from` (`pypi` or `source`). Errors
+and `rac-version` (pin a release). Errors
 fail the check; warnings — including findings downgraded in `.rac/config.yaml` —
 annotate without failing, so a legacy repo can adopt the gate green on day one and
 tighten over time.
@@ -152,15 +152,15 @@ tighten over time.
 > custom relationship edges are deferred (ADR-052, ADR-055); a repo-local schema
 > registry is a future, separately recorded decision.
 
-(The Watchkeeper action at the repository root is the complementary PR-review
-surface — see [Watchkeeper](watchkeeper.md).)
+(The Watchkeeper action in [rac-ci](https://github.com/itsthelore/rac-ci) is the
+complementary PR-review surface — see [Watchkeeper](watchkeeper.md).)
 
 ### The full PR gate (`rac gate`)
 
 To carry the whole contract into one required check, `rac gate` composes
 validation, relationship integrity, and review into a single enforced verdict
 under the corpus **enforcement policy**, and emits one combined SARIF document
-(v0.21.14). The `pr-gate-action` runs it and uploads that single SARIF to Code
+(v0.21.14). The Gatekeeper action runs it and uploads that single SARIF to Code
 Scanning under one category (`rac-gate`), failing when any finding is *blocking*.
 It is the same thin wrapper — the engine decides what is blocking, the action
 computes nothing ([ADR-063](https://github.com/itsthelore/rac-core/blob/main/rac/decisions/adr-063-non-python-clients-are-thin.md)):
@@ -177,14 +177,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: itsthelore/rac-core/pr-gate-action@v0
+      - uses: itsthelore/rac-ci/gatekeeper/github@v1
         with:
           path: rac/
 ```
 
-Inputs mirror `validate-action`: `path` (default `rac`), `upload-sarif` (default
-`true`), `sarif-dir` (default `rac-sarif`, now one `gate.sarif`), `rac-version`,
-and `install-from` (`pypi` or `source`).
+Inputs mirror the Registrar action: `path` (default `rac`), `upload-sarif`
+(default `true`), `sarif-dir` (default `rac-sarif`, now one `gate.sarif`), and
+`rac-version`.
 
 `rac gate <dir>` is also runnable locally — `--json` and `--sarif` produce the
 machine contracts, the exit code is `0` when nothing is blocking and `1`
