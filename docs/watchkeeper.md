@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: itsthelore/rac-core@<release-tag>
+      - uses: itsthelore/rac-ci/watchkeeper/github@v1
 ```
 
 On every pull request that touches your corpus you get:
@@ -64,7 +64,6 @@ On every pull request that touches your corpus you get:
 | `fail-on` | `error` | `error` · `warning` · `none` (report, never fail) |
 | `annotate` | `true` | Emit inline annotations |
 | `rac-version` | `''` | Exact PyPI version to install (empty: latest) |
-| `install-from` | `pypi` | `pypi`, or `source` for this repository's own dogfood |
 
 The action is a wrapper: it installs RAC, resolves the base ref, runs one
 `rac watchkeeper --format github` invocation, and propagates its exit code
@@ -78,7 +77,7 @@ Prefer calling a workflow instead of composing steps:
 ```yaml
 jobs:
   watchkeeper:
-    uses: itsthelore/rac-core/.github/workflows/watchkeeper.yml@<release-tag>
+    uses: itsthelore/rac-ci/.github/workflows/watchkeeper.yml@v1
     with:
       path: rac
 ```
