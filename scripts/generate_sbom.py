@@ -15,6 +15,12 @@ byte-identical ``sbom.json``. The committed ``sbom.json`` at the repository root
 is produced by this script; ``tests/test_sbom.py`` guards it against drift from
 the declared dependencies.
 
+The root component's version is the latest release heading in ``CHANGELOG.md``,
+not the installed package metadata: a working checkout carries a setuptools-scm
+``.devN`` version that matches no published artifact, and an SBOM attesting to a
+version nobody can install defeats its purpose. The committed document therefore
+always describes the most recent release.
+
 Usage::
 
     python scripts/generate_sbom.py            # write sbom.json at the repo root
@@ -34,8 +40,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 SBOM_PATH = REPO_ROOT / "sbom.json"
+CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 
 PACKAGE_NAME = "rac-core"
+
+# The latest release heading in CHANGELOG.md: `## YYYY.MM.N — …` (ADR-076).
+_RELEASE_HEADING_RE = re.compile(r"^## (\d{4}\.\d{2}\.\d+)\b", re.MULTILINE)
 
 # A PEP 508 requirement string starts with the distribution name; strip any
 # version specifier, extras, or environment marker to recover the bare name.
@@ -67,6 +77,18 @@ def _installed_version(name: str) -> str:
         return "unknown"
 
 
+def _released_version() -> str:
+    """The most recent release version recorded in ``CHANGELOG.md``.
+
+    Fails loud when no release heading parses: an SBOM with an unknown root
+    version is worse than no SBOM.
+    """
+    match = _RELEASE_HEADING_RE.search(CHANGELOG.read_text(encoding="utf-8"))
+    if not match:
+        raise SystemExit("no release heading (## YYYY.MM.N) found in CHANGELOG.md")
+    return match.group(1)
+
+
 def _component(name: str, version: str) -> dict:
     """One CycloneDX ``library`` component for ``name`` at ``version``."""
     return {
@@ -81,11 +103,12 @@ def _component(name: str, version: str) -> dict:
 def build_sbom() -> dict:
     """The CycloneDX 1.5 SBOM document for RAC and its runtime dependencies.
 
-    The package itself is the root metadata component; the runtime dependencies
-    are the ``components`` list, sorted by name for determinism. No timestamp is
-    emitted so the document is byte-stable across runs (ADR-002).
+    The package itself is the root metadata component, at the latest released
+    version from ``CHANGELOG.md``; the runtime dependencies are the
+    ``components`` list, sorted by name for determinism. No timestamp is emitted
+    so the document is byte-stable across runs (ADR-002).
     """
-    root = _component(PACKAGE_NAME, _installed_version(PACKAGE_NAME))
+    root = _component(PACKAGE_NAME, _released_version())
 
     dependencies = sorted(_dependency_names(), key=str.casefold)
     components = [_component(name, _installed_version(name)) for name in dependencies]
