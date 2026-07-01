@@ -63,3 +63,16 @@ def test_sbom_is_deterministic_no_timestamp():
     assert "timestamp" not in sbom.get("metadata", {})
     names = [c["name"] for c in sbom["components"]]
     assert names == sorted(names, key=str.casefold)
+
+
+def test_sbom_root_version_is_the_latest_release():
+    # The root component attests to the latest released version (the newest
+    # CHANGELOG.md heading), never a setuptools-scm dev build that matches no
+    # published artifact — an SBOM for an uninstallable version attests nothing.
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    heading = re.search(r"^## (\d{4}\.\d{2}\.\d+)\b", changelog, re.MULTILINE)
+    assert heading, "no release heading (## YYYY.MM.N) in CHANGELOG.md"
+    root = _sbom()["metadata"]["component"]
+    assert root["version"] == heading.group(1)
+    assert ".dev" not in root["version"]
+    assert root["purl"] == f"pkg:pypi/rac-core@{heading.group(1)}"
