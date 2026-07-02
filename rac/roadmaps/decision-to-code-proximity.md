@@ -102,6 +102,7 @@ changes (the `freshness-and-drift-detection` tie-in).
 - adr-074
 - adr-028
 - adr-065
+- adr-098
 
 ## Related Requirements
 
