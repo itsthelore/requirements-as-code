@@ -24,6 +24,65 @@ This puts a single command on your path: `rac`. Check it:
 rac --version
 ```
 
+### No Python? Use the container image
+
+Every release also publishes an official container image to GHCR, versioned
+in lockstep with the PyPI package — the image tag is the same CalVer version:
+
+```bash
+docker run --rm -v "$PWD:/work" ghcr.io/itsthelore/rac:latest validate rac/
+```
+
+In CI, pin a release tag rather than `latest`, or pin by digest for
+immutable builds (the release run prints the pushed digest in its summary):
+
+```bash
+docker pull ghcr.io/itsthelore/rac:2026.6.1
+docker pull ghcr.io/itsthelore/rac@sha256:<digest>
+```
+
+The image is the CLI and nothing more, so it drops into any docker-native
+CI platform. GitLab CI (the image's entrypoint is `rac`; clear it so GitLab
+can run script steps):
+
+```yaml
+rac-gate:
+  image:
+    name: ghcr.io/itsthelore/rac:2026.6.1
+    entrypoint: [""]
+  script:
+    - rac gate rac/
+```
+
+Bitbucket Pipelines:
+
+```yaml
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          name: rac gate
+          image: ghcr.io/itsthelore/rac:2026.6.1
+          script:
+            - rac gate rac/
+```
+
+Jenkins (declarative pipeline, docker agent):
+
+```groovy
+pipeline {
+  agent { docker { image 'ghcr.io/itsthelore/rac:2026.6.1' } }
+  stages {
+    stage('rac gate') {
+      steps { sh 'rac gate rac/' }
+    }
+  }
+}
+```
+
+On GitHub, prefer the ready-made actions (see [Validation](validation.md)
+and [Watchkeeper](watchkeeper.md)) over the raw image.
+
 ## 2. Create your first artifact
 
 The fastest path is one command. From your repository root:
